@@ -8,7 +8,7 @@ export const categories = [
   "奇怪故事",
 ];
 
-export const experiences = [
+const originalExperiences = [
   {
     id: "button",
     title: "千万不要按",
@@ -23,13 +23,13 @@ export const experiences = [
   },
   {
     id: "potato",
-    title: "帮土豆思考人生",
+    title: "土豆人生模拟器",
     type: "无聊实验",
     time: "30 秒",
     art: "potato",
     icon: "🥔",
     color: "lime",
-    intro: "土豆有个大问题。它想听听你的答案。",
+    intro: "给土豆选一条路，看看它会过上什么样的日子。",
     rank: 9,
   },
   {
@@ -106,7 +106,7 @@ export const experiences = [
     time: "10 秒",
     icon: "🐟",
     color: "pink",
-    intro: "看准绿色区域，再把篮球投出去。",
+    intro: "瞄准刻线，帮金鱼完成五次投篮。",
     rank: 3,
   },
   {
@@ -229,3 +229,428 @@ export const tasks = [
     route: "/random?id=secret",
   },
 ];
+
+const newExperiences = [
+  {
+    id: "catch",
+    title: "抓住聊绒",
+    type: "奇怪小游戏",
+    time: "15 秒",
+    art: "loro",
+    icon: "✦",
+    color: "lime",
+    intro: "聊绒会到处跑。15 秒里，你能抓住它几次？",
+    rank: 9,
+    difficulty: "反应挑战",
+  },
+  {
+    id: "refuse",
+    title: "一个会拒绝你的按钮",
+    type: "无聊实验",
+    time: "20 秒",
+    icon: "✋",
+    color: "pink",
+    intro: "它说今天不想工作。你准备怎么回答？",
+    rank: 4,
+  },
+  {
+    id: "waste",
+    title: "自动浪费时间机器",
+    type: "无聊实验",
+    time: "8 秒",
+    icon: "⌛",
+    color: "blue",
+    intro: "开机、暂停，看看八秒钟最后去了哪里。",
+    rank: 3,
+  },
+  {
+    id: "calculator",
+    title: "没有意义的计算器",
+    type: "无聊实验",
+    time: "15 秒",
+    icon: "±",
+    color: "purple",
+    intro: "它真的会计算，只是单位很可疑。",
+    rank: 2,
+  },
+  {
+    id: "echo",
+    title: "纸箱里的回声电台",
+    type: "隐藏彩蛋",
+    time: "15 秒",
+    icon: "♫",
+    color: "purple",
+    intro: "扭到正确的频率，听听纸箱里有什么。",
+    rank: 1,
+    unlock: "lab-echo",
+  },
+];
+
+const gameTypes = {
+  potato: "potato",
+  door: "door",
+  fish: "fish",
+  duck: "duck",
+  cloud: "journal",
+  banana: "journal",
+  catch: "catch",
+  refuse: "refuse",
+  waste: "waste",
+  calculator: "calculator",
+  echo: "echo",
+};
+
+export const experiences = [...originalExperiences, ...newExperiences].map(
+  (entry, index) => ({
+    difficulty: "轻松",
+    mode: entry.route ? "link" : gameTypes[entry.id] || "reveal",
+    favorite: true,
+    replay: !entry.route,
+    share: true,
+    sequence: index + 1,
+    ...entry,
+  }),
+);
+
+// Existing shared URLs use a zero-based task number. Append entries to keep those URLs valid.
+const extraTasks = [
+  ["real", "找找附近最圆的物件", "◉"],
+  ["real", "数数此刻视线里有几种绿色", "✿"],
+  ["real", "看看桌面上哪件东西的影子最长", "◒"],
+  ["real", "观察一只杯子，给它找出一个小细节", "☕"],
+  ["real", "从身边找一件去年也在用的东西", "⌛"],
+  ["real", "找一样你今天第一次注意到的东西", "✧"],
+  ["idea", "给一只起晚了的闹钟编个借口", "◴"],
+  ["idea", "发明一种适合下雨天的云朵口味", "☁"],
+  ["idea", "想一个土豆上任市长后的第一条规定", "🥔"],
+  ["idea", "想象你遇见了五分钟后的自己，会说什么？", "✎"],
+  ["idea", "给一条丢了搭档的袜子起个电影名", "★"],
+  ["idea", "设计一个上班第一天就放假的职位", "✶"],
+  ["site", "抓住一次到处乱跑的聊绒", "✦", "/random?id=catch"],
+  ["site", "去研究所按一次不该按的按钮", "●", "/lab"],
+  ["site", "帮金鱼投完一轮篮球", "🐟", "/random?id=fish"],
+  ["site", "在奇怪合集中找到一件想收藏的东西", "☆", "/collection"],
+  ["site", "给路过的云写一句日记", "☁", "/random?id=cloud"],
+  ["site", "给一颗无名星球起个名字", "◉", "/space-daze"],
+  ["site", "在门后找到一个新房间", "🚪", "/random?id=door"],
+];
+tasks.push(
+  ...extraTasks.map(([type, text, icon, route]) => ({
+    type,
+    text,
+    icon,
+    route,
+  })),
+);
+
+export const taskReplies = {
+  real: "观察报告已收到。命运机器认可你的努力。",
+  idea: "脑洞已登记。这项任务的意义尚未被发现。",
+  site: "探索完成。今天至少完成了一件没用的事。",
+};
+
+export const stars = [
+  { id: "first", x: 22, y: 36, label: "奶油星", symbol: "★", color: "#ffe9a0" },
+  {
+    id: "second",
+    x: 35,
+    y: 44,
+    label: "发呆星",
+    symbol: "✦",
+    color: "#ebbfff",
+  },
+  { id: "third", x: 64, y: 69, label: "好奇星", symbol: "★", color: "#a7e9ff" },
+  {
+    id: "fourth",
+    x: 83,
+    y: 71,
+    label: "晚安星",
+    symbol: "✦",
+    color: "#ff9dd7",
+  },
+  {
+    id: "fifth",
+    x: 8,
+    y: 53,
+    label: "慢吞吞星",
+    symbol: "✧",
+    color: "#dfff8a",
+  },
+];
+
+export const hats = [
+  { name: "睡帽", mark: "♡" },
+  { name: "魔法帽", mark: "✦" },
+  { name: "圣诞帽", mark: "❋" },
+  { name: "奇怪的帽子", mark: "？" },
+];
+
+export const moonExtras = [
+  { id: "glasses", label: "星星眼镜", mark: "✦—✦" },
+  { id: "scarf", label: "围巾", mark: "围" },
+  { id: "headphones", label: "小耳机", mark: "♫" },
+];
+
+export const planetColors = {
+  original: { label: "晚霞原色", hue: 0 },
+  mint: { label: "薄荷绿", hue: 130 },
+  honey: { label: "蜂蜜金", hue: 68 },
+  violet: { label: "星云紫", hue: 320 },
+};
+
+export const planetSizes = {
+  small: "小小的",
+  regular: "刚刚好",
+  large: "大一圈",
+};
+export const planetDecor = { none: "无装饰", spark: "小星屑", flag: "小旗子" };
+
+export const discoveries = {
+  hello: { title: "你好循环", reward: "聊绒承认它也很无聊。" },
+  "button-researcher": { title: "按钮研究员", reward: "优秀按钮按压员证书" },
+  constellation: {
+    title: "星星收藏家",
+    reward: "星星全到齐了。你是夜空的临时管理员。",
+  },
+  "door-person": { title: "门后的人", reward: "门后房间档案" },
+  "loro-secret": {
+    title: "聊绒的秘密",
+    reward: "念头「聊绒把星期一放哪儿了？」",
+  },
+  inspiration: {
+    title: "灵感收集者",
+    reward: "完成六类互动，解锁聊绒的灵感纸条。",
+  },
+  "lab-echo": { title: "按钮的回声", reward: "隐藏实验「纸箱里的回声电台」" },
+};
+
+export const thoughts = {
+  banana: {
+    title: "香蕉为什么是弯的？",
+    source: "和香蕉严肃对话",
+    text: "香蕉说，它只是不擅长把话说直。",
+  },
+  moon: {
+    title: "月亮会不会打喷嚏？",
+    source: "给月亮试装",
+    text: "也许那就是星星抖了一下的原因。",
+  },
+  potato: {
+    title: "土豆也有梦想",
+    source: "土豆人生模拟器",
+    text: "梦想有大有小，有些只想晒晒太阳。",
+  },
+  task: {
+    title: "今天不想上班",
+    source: "随机命运分配局",
+    text: "命运机器给你批了十秒钟的假。",
+  },
+  cloud: {
+    title: "如果云朵有朋友圈",
+    source: "给云朵写日记",
+    text: "它一定会拍很多自己路过时的照片。",
+  },
+  secret: {
+    title: "聊绒把星期一放哪儿了？",
+    source: "聊绒的小秘密",
+    text: "据说标签内侧还有一个很小的口袋。",
+  },
+  inspiration: {
+    title: "灵感正在绕路",
+    source: "灵感收集者",
+    text: "路边有一家只在发呆时营业的小店。",
+  },
+};
+
+export const dailyRecommendations = {
+  games: ["catch", "duck", "fish", "star", "potato"],
+  questions: [
+    ["如果云朵会写日记，会怎么记今天？", "cloud"],
+    ["香蕉为什么总显得很严肃？", "banana"],
+    ["对一颗土豆来说，什么算好日子？", "potato"],
+    ["一厘米会去哪里度假？", "story"],
+    ["月亮今天想戴什么？", "star"],
+  ],
+  moods: [
+    "一点点好奇",
+    "醒着，但没完全醒",
+    "想去月亮上散步",
+    "想跟你说悄悄话",
+    "悄悄开心",
+  ],
+};
+
+export const mascotLines = {
+  home: [
+    ["curious", "你怎么又来了？"],
+    ["companion", "我先替你发个呆。"],
+    ["naughty", "今天也不想太正经。"],
+    ["thinking", "我刚想到一个东西……算了，忘了。"],
+  ],
+  space: [
+    ["companion", "这朵云有点软。你也坐一会儿？"],
+    ["curious", "你有没有觉得这颗星星长得像土豆？"],
+    ["sleepy", "如果我睡着了，麻烦你帮我听一会儿星星。"],
+  ],
+  lab: [
+    ["curious", "这次实验的变量是你的好奇心。"],
+    ["thinking", "我正在研究按钮为什么这么好按。"],
+  ],
+  fortune: [
+    ["curious", "要不要让机器替你做个小决定？"],
+    ["naughty", "我没有偷偷调过概率。大概。"],
+  ],
+  collection: [
+    ["curious", "试试看能不能翻到一件想带走的东西。"],
+    ["naughty", "里面有见不得人的奇怪借口。"],
+  ],
+};
+
+export const helloReplies = [
+  ["curious", "你好？", "hello-tilt"],
+  ["thinking", "你真的很无聊吗？", "hello-nod"],
+  ["scared", "别点我了。", "hello-flinch"],
+  ["naughty", "？？？？？", "hello-wiggle"],
+  ["inspired", "好吧，这个彩蛋是给你的。", "hello-spark"],
+];
+
+export const labMilestones = {
+  1: ["你按了。", "curious", "button-squish"],
+  2: ["你又按了。", "scared", "button-squish"],
+  3: ["你是不是没事干？", "naughty", "lab-glow"],
+  5: ["按钮开始怀疑人生。", "thinking", "lab-glow"],
+  10: ["按钮要求休息。它提议发个呆。", "sleepy", "lab-dim"],
+  15: ["聊绒偷偷探出头，已经看了一会儿了。", "naughty", "lab-glow"],
+  20: ["按钮往旁边挪了一点。还是逃不掉。", "scared", "lab-sidestep"],
+  28: ["恭喜你获得「优秀按钮按压员」称号！", "happy", "lab-glow"],
+  50: ["按钮里传出了回声。隐藏实验开放了。", "inspired", "lab-glow"],
+};
+
+export const potatoStory = {
+  start: {
+    text: "土豆问：我应该去做什么？",
+    choices: [
+      ["去创业", "business"],
+      ["去旅行", "trip"],
+      ["躺着", "rest"],
+      ["思考人生", "thought"],
+    ],
+  },
+  business: {
+    text: "土豆租下一个花盆当办公室。第一件商品要卖什么？",
+    choices: [
+      ["贩卖阳光", "ceo"],
+      ["贩卖休息", "nap"],
+    ],
+  },
+  trip: {
+    text: "土豆坐着小推车来到岔路口。往哪走？",
+    choices: [
+      ["沿着泥土小路走", "traveler"],
+      ["停下来晒一会儿", "nap"],
+    ],
+  },
+  rest: {
+    text: "土豆裹好被子，发现今天没有待办事项。",
+    choices: [
+      ["认真享受休息", "retired"],
+      ["继续睡一会儿", "nap"],
+    ],
+  },
+  thought: {
+    text: "土豆想了半天：岩石会不会也觉得自己是土豆？",
+    choices: [
+      ["写一本推理著作", "philosopher"],
+      ["问一问枕头", "nap"],
+    ],
+  },
+  ceo: {
+    title: "土豆企业家",
+    text: "它卖出了三缕阳光，全部收入用来给办公室添一块地毯。",
+    icon: "♛",
+    color: "lime",
+  },
+  traveler: {
+    title: "泥土旅行家",
+    text: "它绕了花盆一圈，寄出一张写着「世界真大」的明信片。",
+    icon: "☀",
+    color: "blue",
+  },
+  retired: {
+    title: "退休土豆",
+    text: "它把日程交给窗边的风，决定以后每周放七天假。",
+    icon: "☕",
+    color: "purple",
+  },
+  philosopher: {
+    title: "哲学土豆",
+    text: "它的巨著《我土故我在》只写了一页。留白也是一种思想。",
+    icon: "✎",
+    color: "pink",
+  },
+  nap: {
+    title: "人生的意义就是午睡",
+    text: "土豆成功闭上了眼睛。这可能是今天最大的发现。",
+    icon: "☾",
+    color: "blue",
+  },
+};
+
+export const doorEvents = [
+  {
+    id: "ordinary",
+    title: "普通房间",
+    icon: "⌂",
+    color: "blue",
+    text: "一盏台灯正照着一张空椅子。它看起来下班了。",
+  },
+  {
+    id: "upside-down",
+    title: "倒过来的房间",
+    icon: "↻",
+    color: "pink",
+    text: "天花板上的拖鞋都摆得很整齐。",
+  },
+  {
+    id: "visitor",
+    title: "聊绒的临时办公室",
+    art: "loro",
+    color: "lime",
+    text: "聊绒假装正在写报告，纸上只有一颗土豆。",
+  },
+  {
+    id: "note",
+    title: "无人认领的便条",
+    icon: "✉",
+    color: "purple",
+    text: "便条写着：「听见门响三次，就再试一次。」",
+  },
+  {
+    id: "secret",
+    title: "秘密房间",
+    icon: "✦",
+    color: "lime",
+    text: "一排发光的小脚印通到尽头。墙上写着：「门只是想留条缝透气。」",
+  },
+];
+
+export const journalRules = [
+  [/开心|快乐|高兴|好开心|喜悦/, "云朵决定今天变成一朵彩虹云。", "🌈", "pink"],
+  [/难过|累|伤心|疲惫|疲倦/, "云朵轻轻下了一场小雨。", "☂", "blue"],
+  [/工作|上班|加班|通勤/, "云朵决定申请一天假期。", "☁", "purple"],
+];
+
+export function getDailyRecommendation(date = new Date()) {
+  const day = Math.floor(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000,
+  );
+  const dailyPick = (list, offset) =>
+    list[(((day + offset) % list.length) + list.length) % list.length];
+  return {
+    day,
+    game: dailyPick(dailyRecommendations.games, 1),
+    question: dailyPick(dailyRecommendations.questions, 3),
+    task: (((day + 5) % tasks.length) + tasks.length) % tasks.length,
+    mood: dailyPick(dailyRecommendations.moods, 7),
+  };
+}

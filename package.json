@@ -4,8 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/serve.mjs",
-    "check": "node --check public/app.js && node --check public/content.js && node --check scripts/serve.mjs",
-    "deploy": "wrangler deploy"
+    "check": "node --check public/app.js && node --check public/content.js && node --check public/games.js && node --check public/mascot.js && node --check public/state.js && node --check scripts/serve.mjs",
+    "deploy": "wrangler deploy",
+    "test": "node --test"
   },
   "devDependencies": {
     "wrangler": "^4.166.0"
