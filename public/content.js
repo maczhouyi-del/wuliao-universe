@@ -25,7 +25,7 @@ const originalExperiences = [
     id: "potato",
     title: "土豆人生模拟器",
     type: "无聊实验",
-    time: "30 秒",
+    time: "约30秒",
     art: "potato",
     icon: "🥔",
     color: "lime",
@@ -36,7 +36,7 @@ const originalExperiences = [
     id: "door",
     title: "永远也关不上的门",
     type: "无聊实验",
-    time: "20 秒",
+    time: "一小会儿",
     art: "door",
     icon: "🚪",
     color: "blue",
@@ -47,7 +47,7 @@ const originalExperiences = [
     id: "star",
     title: "收下一颗星星",
     type: "奇怪小游戏",
-    time: "20 秒",
+    time: "随时",
     icon: "✦",
     color: "blue",
     intro: "给最心仪的一颗星星找个家。",
@@ -58,7 +58,7 @@ const originalExperiences = [
     id: "duck",
     title: "跟鸭子比耐心",
     type: "奇怪小游戏",
-    time: "5 秒",
+    time: "约5秒",
     icon: "🦆",
     color: "blue",
     intro: "等鸭子先开口，再回应它。",
@@ -69,7 +69,7 @@ const originalExperiences = [
     id: "cloud",
     title: "给云朵写日记",
     type: "脑洞问题",
-    time: "30 秒",
+    time: "一小会儿",
     icon: "☁",
     color: "pink",
     intro: "如果你是一朵云，今天会记下什么？",
@@ -85,7 +85,7 @@ const originalExperiences = [
     id: "nickname",
     title: "领一个奇怪外号",
     type: "趣味生成器",
-    time: "5 秒",
+    time: "约5秒",
     icon: "✎",
     color: "lime",
     intro: "从今天起，你可以用这个名字发呆。",
@@ -103,7 +103,7 @@ const originalExperiences = [
     id: "fish",
     title: "教金鱼打篮球",
     type: "奇怪小游戏",
-    time: "10 秒",
+    time: "一小会儿",
     icon: "🐟",
     color: "pink",
     intro: "瞄准刻线，帮金鱼完成五次投篮。",
@@ -113,7 +113,7 @@ const originalExperiences = [
     id: "banana",
     title: "和香蕉严肃对话",
     type: "脑洞问题",
-    time: "20 秒",
+    time: "一小会儿",
     icon: "🍌",
     color: "lime",
     intro: "这根香蕉已准备好接受采访。",
@@ -129,7 +129,7 @@ const originalExperiences = [
     id: "secret",
     title: "聊绒的小秘密",
     type: "隐藏彩蛋",
-    time: "10 秒",
+    time: "约5秒",
     icon: "★",
     art: "loro",
     color: "pink",
@@ -146,7 +146,7 @@ const originalExperiences = [
     id: "story",
     title: "一厘米长的失踪案",
     type: "奇怪故事",
-    time: "10 秒",
+    time: "约5秒",
     icon: "✧",
     color: "blue",
     intro: "昨晚，有一厘米从尺子上溜走了。",
@@ -162,7 +162,7 @@ const originalExperiences = [
     id: "excuse",
     title: "发呆借口生成器",
     type: "趣味生成器",
-    time: "5 秒",
+    time: "约5秒",
     icon: "⌁",
     color: "lime",
     intro: "下一次被问在干嘛，就告诉他们……",
@@ -235,7 +235,7 @@ const newExperiences = [
     id: "catch",
     title: "抓住聊绒",
     type: "奇怪小游戏",
-    time: "15 秒",
+    time: "约15秒",
     art: "loro",
     icon: "✦",
     color: "lime",
@@ -247,7 +247,7 @@ const newExperiences = [
     id: "refuse",
     title: "一个会拒绝你的按钮",
     type: "无聊实验",
-    time: "20 秒",
+    time: "一小会儿",
     icon: "✋",
     color: "pink",
     intro: "它说今天不想工作。你准备怎么回答？",
@@ -257,7 +257,7 @@ const newExperiences = [
     id: "waste",
     title: "自动浪费时间机器",
     type: "无聊实验",
-    time: "8 秒",
+    time: "一小会儿",
     icon: "⌛",
     color: "blue",
     intro: "开机、暂停，看看八秒钟最后去了哪里。",
@@ -267,7 +267,7 @@ const newExperiences = [
     id: "calculator",
     title: "没有意义的计算器",
     type: "无聊实验",
-    time: "15 秒",
+    time: "一小会儿",
     icon: "±",
     color: "purple",
     intro: "它真的会计算，只是单位很可疑。",
@@ -277,7 +277,7 @@ const newExperiences = [
     id: "echo",
     title: "纸箱里的回声电台",
     type: "隐藏彩蛋",
-    time: "15 秒",
+    time: "一小会儿",
     icon: "♫",
     color: "purple",
     intro: "扭到正确的频率，听听纸箱里有什么。",
@@ -407,6 +407,10 @@ export const planetDecor = { none: "无装饰", spark: "小星屑", flag: "小�
 
 export const discoveries = {
   hello: { title: "你好循环", reward: "聊绒承认它也很无聊。" },
+  "bored-chaser": {
+    title: "无聊追逐者",
+    reward: "你已经成功抓住无聊三次。",
+  },
   "button-researcher": { title: "按钮研究员", reward: "优秀按钮按压员证书" },
   constellation: {
     title: "星星收藏家",
@@ -506,8 +510,27 @@ export const mascotLines = {
   ],
 };
 
+export const pageTips = {
+  lab: {
+    title: "研究所",
+    lines: ["这里有个不该按的按钮。", "你确定要试试吗？"],
+  },
+  space: {
+    title: "宇宙发呆中心",
+    lines: [
+      "点一下星星可以收藏。",
+      "拖一下就能移动，方向键也可以。",
+      "想听环境音的话，点下面的粉色按钮。",
+    ],
+  },
+  fortune: {
+    title: "命运分配局",
+    lines: ["不知道做什么？让机器替你安排一件小事吧。"],
+  },
+};
+
 export const helloReplies = [
-  ["curious", "你好？", "hello-tilt"],
+  ["curious", "你已经和宇宙打了个招呼。再点一次看看会不会更无聊。", "word-pop"],
   ["thinking", "你真的很无聊吗？", "hello-nod"],
   ["scared", "别点我了。", "hello-flinch"],
   ["naughty", "？？？？？", "hello-wiggle"],
@@ -640,17 +663,40 @@ export const journalRules = [
   [/工作|上班|加班|通勤/, "云朵决定申请一天假期。", "☁", "purple"],
 ];
 
-export function getDailyRecommendation(date = new Date()) {
+const publicExperienceIds = new Set(
+  experiences
+    .filter((entry) => !entry.unlock && entry.type !== "隐藏彩蛋")
+    .map(({ id }) => id),
+);
+const dailyGames = dailyRecommendations.games.filter((id) =>
+  publicExperienceIds.has(id),
+);
+const dailyQuestions = dailyRecommendations.questions.filter(([, id]) =>
+  publicExperienceIds.has(id),
+);
+
+export function getDailyRecommendation(date = new Date(), previous) {
   const day = Math.floor(
     Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000,
   );
-  const dailyPick = (list, offset) =>
-    list[(((day + offset) % list.length) + list.length) % list.length];
+  const rotation = previous?.day === day ? previous.rotation : 0;
+  const dailyIndex = (length, offset) =>
+    (((day + offset + rotation) % length) + length) % length;
   return {
     day,
-    game: dailyPick(dailyRecommendations.games, 1),
-    question: dailyPick(dailyRecommendations.questions, 3),
-    task: (((day + 5) % tasks.length) + tasks.length) % tasks.length,
-    mood: dailyPick(dailyRecommendations.moods, 7),
+    rotation,
+    game: dailyGames[dailyIndex(dailyGames.length, 1)],
+    question: dailyQuestions[dailyIndex(dailyQuestions.length, 3)],
+    task: dailyIndex(tasks.length, 5),
+    mood: dailyRecommendations.moods[
+      dailyIndex(dailyRecommendations.moods.length, 7)
+    ],
   };
+}
+
+export function rotateDailyRecommendation(previous, date = new Date()) {
+  return getDailyRecommendation(date, {
+    day: previous.day,
+    rotation: previous.rotation + 1,
+  });
 }

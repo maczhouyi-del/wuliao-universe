@@ -3,6 +3,7 @@ import {
   experiences,
   hats,
   moonExtras,
+  pageTips,
   planetColors,
   planetDecor,
   planetSizes,
@@ -36,6 +37,10 @@ const activityIds = [
   "planet",
 ];
 const taskTypes = ["all", ...taskCategories.map(({ id }) => id)];
+const homeMilestones = {
+  hello: { count: 5, discovery: "hello" },
+  bored: { count: 3, discovery: "bored-chaser" },
+};
 
 export const clamp = (value, lower, upper) =>
   Math.max(lower, Math.min(upper, value));
@@ -63,6 +68,8 @@ export function normalizeSave(input) {
   const record = object(data.games);
   const fortune = object(data.fortune);
   const settings = object(data.settings);
+  const homeCounters = object(data.homeCounters);
+  const tipsSeen = object(data.tipsSeen);
   const result = {
     presses: count(data.presses),
     potatoes: count(data.potatoes),
@@ -96,7 +103,15 @@ export function normalizeSave(input) {
       data.moonExtras,
       moonExtras.map(({ id }) => id),
     ),
+    homeCounters: {
+      hello: count(homeCounters.hello),
+      bored: count(homeCounters.bored),
+    },
+    tipsSeen: Object.fromEntries(
+      Object.keys(pageTips).map((id) => [id, tipsSeen[id] === true]),
+    ),
     settings: {
+      fishManual: settings.fishManual === true,
       motion:
         typeof settings.motion === "boolean"
           ? settings.motion
@@ -133,7 +148,53 @@ export function normalizeSave(input) {
   if (result.rooms > 0) result.discoveries["door-person"] ??= 0;
   if (result.stars.length === stars.length)
     result.discoveries.constellation ??= 0;
+  for (const [key, milestone] of Object.entries(homeMilestones)) {
+    if (result.homeCounters[key] >= milestone.count)
+      result.discoveries[milestone.discovery] ??= 0;
+  }
   return result;
+}
+
+export function recordDiscovery(data, id, time = Date.now()) {
+  if (!Object.hasOwn(discoveries, id) || Object.hasOwn(data.discoveries, id))
+    return false;
+  data.discoveries[id] = time;
+  return true;
+}
+
+export function recordHomeInteraction(data, key, time = Date.now()) {
+  const milestone = homeMilestones[key];
+  const count = Math.min(Number.MAX_SAFE_INTEGER, data.homeCounters[key] + 1);
+  data.homeCounters[key] = count;
+  return {
+    count,
+    unlocked:
+      count === milestone.count &&
+      recordDiscovery(data, milestone.discovery, time)
+        ? milestone.discovery
+        : null,
+  };
+}
+
+export function toggleStarCollection(data, id, time = Date.now()) {
+  if (!starIds.includes(id)) return null;
+  const collected = !data.stars.includes(id);
+  data.stars = collected
+    ? [...data.stars, id]
+    : data.stars.filter((star) => star !== id);
+  return {
+    collected,
+    unlocked:
+      data.stars.length === stars.length &&
+      recordDiscovery(data, "constellation", time),
+  };
+}
+
+export function fortuneFromLink(fortune, taskNumber) {
+  if (typeof taskNumber !== "string" || !/^\d+$/.test(taskNumber))
+    return fortune;
+  const index = Number(taskNumber);
+  return tasks[index] ? { ...fortune, index, done: false } : fortune;
 }
 
 export function readSave() {

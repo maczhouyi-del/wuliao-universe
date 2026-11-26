@@ -1,13 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  discoveries,
   doorEvents,
   experiences,
   getDailyRecommendation,
+  rotateDailyRecommendation,
   potatoStory,
+  stars,
   tasks,
 } from "../public/content.js";
-import { createActiveClock, normalizeSave } from "../public/state.js";
+import {
+  createActiveClock,
+  fortuneFromLink,
+  normalizeSave,
+  recordHomeInteraction,
+  toggleStarCollection,
+} from "../public/state.js";
 
 test("legacy counters, favorites, hats and preferences survive migration", () => {
   const data = normalizeSave({
@@ -64,7 +73,11 @@ test("malformed fields reset independently and star coordinates stay within boun
   assert.equal(data.hat, 0);
   assert.deepEqual(data.favorites, ["fish"]);
   assert.deepEqual(data.stars, ["third"]);
-  assert.deepEqual(data.settings, { motion: false, labSound: true });
+  assert.deepEqual(data.settings, {
+    motion: false,
+    labSound: true,
+    fishManual: false,
+  });
   assert.deepEqual(data.fortune, { type: "all", index: null, done: false });
   assert.deepEqual(data.discoveries, { hello: 42 });
   assert.deepEqual(data.thoughts, { banana: 88 });
@@ -157,4 +170,185 @@ test("content IDs and sorting are stable, task pools are balanced, and story lin
   assert.ok(
     Object.values(potatoStory).filter(({ title }) => title).length >= 3,
   );
+});
+
+test("home counters accept only nonnegative safe integers and default independently", () => {
+  assert.deepEqual(normalizeSave({ presses: 27 }).homeCounters, {
+    hello: 0,
+    bored: 0,
+  });
+  for (const value of [
+    -1,
+    "9",
+    0.5,
+    Infinity,
+    Number.MAX_SAFE_INTEGER + 1,
+    null,
+  ]) {
+    const data = normalizeSave({
+      homeCounters: { hello: value, bored: 2 },
+      presses: 11,
+    });
+    assert.deepEqual(data.homeCounters, { hello: 0, bored: 2 });
+    assert.equal(data.presses, 11);
+  }
+  const extreme = normalizeSave({
+    homeCounters: { hello: Number.MAX_SAFE_INTEGER },
+  });
+  assert.equal(
+    recordHomeInteraction(extreme, "hello").count,
+    Number.MAX_SAFE_INTEGER,
+  );
+});
+
+test("page tips migrate independently and accept only real booleans", () => {
+  assert.deepEqual(normalizeSave({ greeted: true }).tipsSeen, {
+    lab: false,
+    space: false,
+    fortune: false,
+  });
+  const save = normalizeSave({
+    greeted: true,
+    tipsSeen: { lab: true, space: "true", fortune: 1, other: true },
+  });
+  assert.deepEqual(save.tipsSeen, { lab: true, space: false, fortune: false });
+  assert.equal(save.greeted, true);
+  assert.deepEqual(normalizeSave({ tipsSeen: true }).tipsSeen, {
+    lab: false,
+    space: false,
+    fortune: false,
+  });
+});
+
+test("manual aim saves separately from motion, and malformed preferences fall back", () => {
+  assert.equal(normalizeSave({ motion: true }).settings.fishManual, false);
+  assert.equal(
+    normalizeSave({ settings: { fishManual: "true", motion: true } }).settings
+      .fishManual,
+    false,
+  );
+  const data = normalizeSave({
+    settings: { fishManual: true, motion: false, labSound: true },
+  });
+  assert.deepEqual(normalizeSave(JSON.parse(JSON.stringify(data))).settings, {
+    fishManual: true,
+    motion: false,
+    labSound: true,
+  });
+});
+
+test("the third catch unlocks bored-chaser once and keeps its timestamp after migration", () => {
+  const data = normalizeSave(null);
+  assert.equal(recordHomeInteraction(data, "bored", 10).unlocked, null);
+  assert.equal(recordHomeInteraction(data, "bored", 20).unlocked, null);
+  assert.deepEqual(recordHomeInteraction(data, "bored", 30), {
+    count: 3,
+    unlocked: "bored-chaser",
+  });
+  assert.equal(recordHomeInteraction(data, "bored", 40).unlocked, null);
+  assert.equal(discoveries["bored-chaser"].title, "无聊追逐者");
+  const restored = normalizeSave(JSON.parse(JSON.stringify(data)));
+  assert.equal(restored.homeCounters.bored, 4);
+  assert.equal(restored.discoveries["bored-chaser"], 30);
+  assert.equal(
+    normalizeSave({ homeCounters: { bored: 3 } }).discoveries["bored-chaser"],
+    0,
+  );
+  const oldHello = normalizeSave({
+    homeCounters: { hello: 4 },
+    discoveries: { hello: 7 },
+  });
+  assert.equal(recordHomeInteraction(oldHello, "hello", 50).unlocked, null);
+  assert.equal(oldHello.discoveries.hello, 7);
+});
+
+test("daily alternate groups change safely and leave the default intact", () => {
+  const day = new Date(2026, 10, 24, 9);
+  const original = getDailyRecommendation(day);
+  const publicIds = new Set(
+    experiences
+      .filter((entry) => !entry.unlock && entry.type !== "隐藏彩蛋")
+      .map(({ id }) => id),
+  );
+  let current = original;
+  for (let i = 0; i < 32; i++) {
+    const next = rotateDailyRecommendation(current, day);
+    for (const key of ["game", "question", "task", "mood"])
+      assert.notDeepEqual(next[key], current[key]);
+    assert(
+      publicIds.has(next.game) &&
+        publicIds.has(next.question[1]) &&
+        tasks[next.task],
+    );
+    current = next;
+  }
+  assert.deepEqual(getDailyRecommendation(day), original);
+});
+
+test("the next calendar day resets alternate groups to the new default", () => {
+  const evening = new Date(2026, 10, 24, 23, 59);
+  const alternate = rotateDailyRecommendation(
+    getDailyRecommendation(evening),
+    evening,
+  );
+  assert.equal(alternate.rotation, 1);
+  assert.deepEqual(
+    getDailyRecommendation(new Date(2026, 10, 24, 23, 59, 59), alternate),
+    alternate,
+  );
+  const midnight = new Date(2026, 10, 25);
+  assert.deepEqual(
+    getDailyRecommendation(midnight, alternate),
+    getDailyRecommendation(midnight),
+  );
+  assert.deepEqual(
+    rotateDailyRecommendation(alternate, midnight),
+    getDailyRecommendation(midnight),
+  );
+});
+
+test("stars toggle both ways without revoking the constellation discovery", () => {
+  const data = normalizeSave(null);
+  const [first, ...rest] = stars;
+  assert.deepEqual(toggleStarCollection(data, first.id, 10), {
+    collected: true,
+    unlocked: false,
+  });
+  assert.deepEqual(toggleStarCollection(data, first.id, 20), {
+    collected: false,
+    unlocked: false,
+  });
+  assert.deepEqual(data.stars, []);
+  for (const { id } of rest) toggleStarCollection(data, id, 30);
+  assert.deepEqual(toggleStarCollection(data, first.id, 40), {
+    collected: true,
+    unlocked: true,
+  });
+  assert.deepEqual(toggleStarCollection(data, first.id, 50), {
+    collected: false,
+    unlocked: false,
+  });
+  assert.deepEqual(toggleStarCollection(data, first.id, 60), {
+    collected: true,
+    unlocked: false,
+  });
+  assert.equal(normalizeSave(data).discoveries.constellation, 40);
+  assert.equal(toggleStarCollection(data, "unknown"), null);
+});
+
+test("reopening an unchanged shared task resets completion while a plain route preserves it", () => {
+  const saved = { type: "site", index: 8, done: true };
+  assert.deepEqual(fortuneFromLink(saved, "8"), {
+    type: "site",
+    index: 8,
+    done: false,
+  });
+  assert.deepEqual(fortuneFromLink(saved, "0"), {
+    type: "site",
+    index: 0,
+    done: false,
+  });
+  for (const invalid of [null, "-1", "1e0", "30", "length"])
+    assert.equal(fortuneFromLink(saved, invalid), saved);
+  assert.equal(saved.done, true);
 });

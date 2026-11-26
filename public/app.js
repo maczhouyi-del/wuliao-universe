@@ -13,10 +13,21 @@ import {
   discoveries,
   thoughts,
   getDailyRecommendation,
+  rotateDailyRecommendation,
+  pageTips,
   helloReplies,
   labMilestones,
 } from "./content.js";
-import { createActiveClock, limitStar, readSave, writeSave } from "./state.js";
+import {
+  createActiveClock,
+  fortuneFromLink,
+  limitStar,
+  readSave,
+  recordDiscovery,
+  recordHomeInteraction,
+  toggleStarCollection,
+  writeSave,
+} from "./state.js";
 import { createGame, renderGame } from "./games.js";
 import { attachMascot, mascotLine, setMascot } from "./mascot.js";
 
@@ -56,9 +67,9 @@ const artSizes = {
   planet: [510, 405],
   potato: [518, 430],
 };
-function art(name, css = "") {
+function art(name, css = "", lazy = false) {
   const [width, height] = artSizes[name];
-  return `<img class="${css}" src="${assets}${name}.webp" width="${width}" height="${height}" alt="" draggable="false">`;
+  return `<img class="${css}" src="${assets}${name}.webp" width="${width}" height="${height}" alt="" draggable="false"${lazy ? ' loading="lazy" decoding="async"' : ""}>`;
 }
 const pageNames = {
   "/": "互联网发呆游乐场",
@@ -73,8 +84,10 @@ let currentPath;
 let item;
 let category = "全部";
 let order = "推荐";
-let pressesOnHome = 0;
+let dailyView = getDailyRecommendation();
 let chaseCount = 0;
+let chaseCaught = false;
+let boredPress;
 let chaseCooldown = 0;
 let lastPointerSample = 0;
 let lastLoroPeek = -Infinity;
@@ -91,6 +104,7 @@ let taskDone = saved.fortune.done;
 let soundSession;
 let drag;
 let ignoredStarClick;
+let dialogTrigger;
 const animations = new Map();
 
 const mascotArt = (css = "") => art("loro", css + " mascot-art");
@@ -101,15 +115,15 @@ function posterMark() {
   return '<span class="poster-mark" aria-hidden="true">✳</span>';
 }
 
-function artPanel(experience) {
+function artPanel(experience, lazy = false) {
   return experience.art
-    ? art(experience.art)
+    ? art(experience.art, "", lazy)
     : '<span aria-hidden="true">' + experience.icon + "</span>";
 }
 
 function card(experience) {
   return `<a class="experience-card ${experience.color}" href="/random?id=${experience.id}">
-    <div class="card-art">${artPanel(experience)}</div>
+    <div class="card-art">${artPanel(experience, true)}</div>
     <div class="card-copy"><small>${experience.type} · ${experience.time}</small><h3>${experience.title}</h3><p>${experience.intro}</p></div>
     <span class="card-arrow" aria-hidden="true">↗</span>
   </a>`;
@@ -126,7 +140,10 @@ function home() {
   }
   <section class="home-scene" aria-labelledby="hero-title">
     <div class="poster">
-      <div class="poster-top"><span><i></i> 点一下「你好」试试</span><span>WULIAO UNIVERSE</span></div>
+      <div class="poster-top">
+        <span><i aria-hidden="true"></i> 点一下「你好」试试</span>
+        <span class="home-counters"><span id="hello-count">已说你好 ×${saved.homeCounters.hello}</span><span id="bored-count">已抓住无聊 ×${saved.homeCounters.bored}</span></span>
+      </div>
       <div class="word-stack hello-stack">
         <button class="word hello one" type="button" data-action="hello">你好</button>
         <button class="word hello two" type="button" data-action="hello">你好</button>
@@ -154,29 +171,68 @@ function home() {
   <section id="playground" class="body-section playground">
     <div class="section-heading"><div><p class="eyeline">✦ 随便点一点</p><h2>今天想浪费一点什么？</h2></div><a class="text-link" href="/collection">逛逛奇怪合集</a></div>
     ${dailySection()}
+    <a class="discovery-link text-link" href="/archive#discoveries">你已经发现 ${discoveryCount()} / ${discoveryTotal} 个隐藏彩蛋。</a>
     <div class="portal-grid">
-      <a class="portal pink" href="/lab"><small>无聊实验</small>${art("button")}<h3>没用的东西研究所</h3><p>这里的实验，一个比一个没用。</p></a>
-      <a class="portal purple" href="/space-daze"><small>慢慢来</small>${art("planet")}<h3>宇宙发呆中心</h3><p>什么都不用做，也挺好的。</p></a>
-      <a class="portal lime" href="/fortune"><small>随机挑战</small>${art("machine")}<h3>随机命运分配局</h3><p>抽一件微不足道又挺有意思的事。</p></a>
+      <a class="portal pink" href="/lab"><small>无聊实验</small>${art("button", "", true)}<h3>没用的东西研究所</h3><p>这里的实验，一个比一个没用。</p></a>
+      <a class="portal purple" href="/space-daze"><small>慢慢来</small>${art("planet", "", true)}<h3>宇宙发呆中心</h3><p>什么都不用做，也挺好的。</p></a>
+      <a class="portal lime" href="/fortune"><small>随机挑战</small>${art("machine", "", true)}<h3>随机命运分配局</h3><p>抽一件微不足道又挺有意思的事。</p></a>
     </div>
   </section>`;
 }
 
+function dailyLinks(daily) {
+  return `
+    <a href="/random?id=${daily.game}"><small>今日小游戏</small><strong>${getItem(daily.game).title}</strong></a>
+    <a href="/random?id=${daily.question[1]}"><small>今日奇怪问题</small><strong>${daily.question[0]}</strong></a>
+    <a href="/fortune?task=${daily.task}"><small>今日随机任务</small><strong>${tasks[daily.task].text}</strong></a>
+    <div><small>聊绒今日心情</small><strong>${daily.mood}</strong></div>`;
+}
+
 function dailySection() {
-  const daily = getDailyRecommendation();
-  return `<section class="daily-board" data-day="${daily.day}" aria-labelledby="daily-title">
-    <h3 id="daily-title">聊绒今天推荐</h3>
-    <div class="daily-links">
-      <a href="/random?id=${daily.game}"><small>今日小游戏</small><strong>${getItem(daily.game).title}</strong></a>
-      <a href="/random?id=${daily.question[1]}"><small>今日奇怪问题</small><strong>${daily.question[0]}</strong></a>
-      <a href="/fortune?task=${daily.task}"><small>今日随机任务</small><strong>${tasks[daily.task].text}</strong></a>
-      <div><small>聊绒今日心情</small><strong>${daily.mood}</strong></div>
+  dailyView = getDailyRecommendation(new Date(), dailyView);
+  return `<section class="daily-board" aria-labelledby="daily-title">
+    <div class="daily-heading">
+      <h3 id="daily-title">聊绒今天推荐</h3>
+      <div class="daily-controls">
+        <button class="text-button" type="button" data-action="daily-reset" ${dailyView.rotation ? "" : "hidden"}>恢复今日推荐</button>
+        <button class="pill plain" type="button" data-action="daily-next">换一组</button>
+      </div>
     </div>
+    <p class="daily-mode" role="status">${dailyView.rotation ? "今日备用推荐" : ""}</p>
+    <div class="daily-links">${dailyLinks(dailyView)}</div>
   </section>`;
+}
+
+function updateDaily(next, message) {
+  dailyView = next;
+  $(".daily-links").innerHTML = dailyLinks(next);
+  const reset = $('[data-action="daily-reset"]');
+  if (!next.rotation && document.activeElement === reset) {
+    $('[data-action="daily-next"]').focus({ preventScroll: true });
+  }
+  reset.hidden = !next.rotation;
+  $(".daily-mode").textContent = next.rotation ? "今日备用推荐" : "";
+  if (message) announce(message);
+}
+
+function refreshDaily() {
+  if (currentPath !== "/" || document.hidden) return;
+  const next = getDailyRecommendation(new Date(), dailyView);
+  if (next.day !== dailyView.day) updateDaily(next);
+}
+
+function pageTip(id) {
+  if (!saved.greeted || saved.tipsSeen[id]) return "";
+  const tip = pageTips[id];
+  return `<aside class="page-tip" aria-label="${tip.title}使用提示">
+    ${mascotArt()}<p>${tip.lines.join(" ")}</p>
+    <button class="pill lime" type="button" data-action="dismiss-tip" data-id="${id}">知道了</button>
+  </aside>`;
 }
 
 function lab() {
   return `<section class="body-section lab-page">
+    ${pageTip("lab")}
     <div class="lab-grid">
       <div class="lab-intro">
         <p class="eyeline">⚗ 无聊实验</p>
@@ -216,14 +272,15 @@ function selectOptions(options, selected) {
 function space() {
   const style = saved.planetStyle;
   return `<section class="space-scene" aria-labelledby="space-title">
+    ${pageTip("space")}
     <div class="space-stage" id="space-stage">
       <header class="space-title"><h1 id="space-title">宇宙发呆中心</h1><p>什么都不用做。</p></header>
-      <aside class="star-note"><strong>拖动星星</strong><small>点星星收藏。方向键也能移动。</small></aside>
+      <aside class="star-note"><strong>星星怎么玩</strong><small>点一下：收藏 / 放回<br>拖一下：移动星星<br>方向键：微调位置</small></aside>
       ${stars
         .map((star) => {
           const position = saved.starPositions[star.id] || star;
           const collected = saved.stars.includes(star.id);
-          return `<button class="space-star" type="button" data-action="star" data-id="${star.id}" aria-label="${star.label}" aria-pressed="${collected}" style="--x:${position.x}%;--y:${position.y}%;--star-hue:${star.color}"><span aria-hidden="true">${star.symbol}</span><small aria-hidden="true">✓</small></button>`;
+          return `<button class="space-star" type="button" data-action="star" data-id="${star.id}" aria-label="${star.label}" aria-pressed="${collected}" aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight" style="--x:${position.x}%;--y:${position.y}%;--star-hue:${star.color}"><span aria-hidden="true">${star.symbol}</span><small aria-hidden="true">✓</small></button>`;
         })
         .join("")}
       <div class="planet-station">
@@ -241,7 +298,7 @@ function space() {
         <p class="guide-line" role="status" id="space-line">聊绒在云上留了个位置。</p>
       </div>
       <div class="space-player">
-        <button type="button" class="pill pink" data-action="space-sound" aria-pressed="${Boolean(soundSession?.ambient)}">${soundSession?.ambient ? "Ⅱ 暂停发呆音" : "▷ 一起发呆"}</button>
+        <button type="button" class="pill pink" data-action="space-sound" aria-pressed="${Boolean(soundSession?.ambient)}"><span class="ambient-indicator" aria-hidden="true"></span><span class="ambient-label">${soundSession?.ambient ? "Ⅱ 暂停环境音" : "▷ 播放发呆环境音"}</span></button>
         <button type="button" class="jar-link" data-action="jar">星星收藏罐 <span id="star-count">${saved.stars.length}</span></button>
       </div>
     </div>
@@ -258,6 +315,7 @@ function fortune() {
     taskCategories.find((entry) => entry.id === selected?.type) ||
     taskCategories[0];
   return `<section class="body-section fortune-page">
+    ${pageTip("fortune")}
     <div class="fortune-grid">
       <div class="fortune-intro">
         <p class="eyeline">✷ 随机命运分配局</p>
@@ -299,7 +357,7 @@ function randomPage() {
     <article class="random-card ${item.color}">
       <div class="random-art">${artPanel(item)}${posterMark()}</div>
       <div class="random-copy"><small>${item.type} · ${item.time} · ${item.difficulty}</small><h2>${item.title}</h2><p>${item.intro}</p>
-        ${renderGame(item, reduced(), unlocked)}
+        ${renderGame(item, reduced() || saved.settings.fishManual, unlocked)}
         <p class="result" id="activity-result" role="status"></p>
       </div>
     </article>
@@ -343,7 +401,7 @@ function archive() {
         " 分钟 " +
         (saved.activeSeconds % 60) +
         " 秒";
-  const count = Object.keys(saved.discoveries).length;
+  const count = discoveryCount();
   const stats = [
     [saved.presses, "按过按钮"],
     [saved.potatoes, "帮过土豆"],
@@ -360,6 +418,7 @@ function archive() {
     ${mascotGuide("archive", archiveLine())}
     <div class="stat-grid">${stats.map(([count, label]) => `<div><strong>${count}</strong><span>${label}</span></div>`).join("")}</div>
     <div class="certificate-strip"><div><h2>${saved.presses >= 28 ? "优秀按钮按压员" : "国际无聊组织认证证书"}</h2><p>今天也给无聊留了一点位置。</p></div><button type="button" class="pill pink" data-action="certificate">领取我的证书</button></div>
+    ${archiveTips()}
     ${archiveDiscoveries()}
     ${archiveThoughts()}
     <section id="favorites" class="archive-section"><div class="section-heading"><h2>我的收藏</h2><a href="/collection" class="text-link">去逛合集</a></div>
@@ -376,22 +435,42 @@ function archiveLine() {
   return "谁说无聊没东西可记录？先记下一页。";
 }
 
+const discoveryTotal = Object.keys(discoveries).length;
+const discoveryCount = () => Object.keys(saved.discoveries).length;
+
+function archiveTips() {
+  const tips = Object.entries(pageTips);
+  const seen = tips.filter(([id]) => saved.tipsSeen[id]).length;
+  return `<section class="tip-progress" aria-labelledby="tips-title"><h2 id="tips-title">新手引导已完成 ${seen} / ${tips.length}</h2>
+    <ul>${tips.map(([id, tip]) => `<li>${tip.title} · ${saved.tipsSeen[id] ? "已看过" : "待查看"}</li>`).join("")}</ul></section>`;
+}
+
 function archiveDiscoveries() {
   const records = Object.entries(saved.discoveries).sort((a, b) => b[1] - a[1]);
+  const pending = discoveryTotal - records.length;
+  const date = new Intl.DateTimeFormat("zh-CN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
   return `<section class="archive-section" id="discoveries"><div class="section-heading"><h2>隐藏发现</h2></div>
-    ${
-      records.length
-        ? `<ul class="record-grid">${records
-            .map(
-              ([
-                id,
-              ]) => `<li><strong>${discoveries[id].title}</strong><p>${discoveries[id].reward}</p>
+    <label class="discovery-progress">你已经发现 ${records.length} / ${discoveryTotal} 个秘密
+      <progress value="${records.length}" max="${discoveryTotal}"></progress>
+    </label>
+    ${pending ? '<p class="discovery-hint">还有一些奇怪的秘密等你发现。</p>' : ""}
+    <ul class="record-grid">
+      ${records
+        .map(
+          ([
+            id,
+            time,
+          ]) => `<li><strong>${discoveries[id].title}</strong><p>${discoveries[id].reward}</p>
+      <small>${time ? `<time datetime="${new Date(time).toISOString()}">${date.format(time)}</time>` : "旧版存档未记录时间"}</small>
       ${id === "lab-echo" ? '<a class="text-link" href="/random?id=echo">收听电台</a>' : ""}
       ${id === "door-person" ? '<a class="text-link" href="/random?id=door">回门边看看</a>' : ""}</li>`,
-            )
-            .join("")}</ul>`
-        : '<p class="empty-note">试试多点几次「你好」，聊绒好像藏了一句话。</p>'
-    }
+        )
+        .join("")}
+      ${Array.from({ length: pending }, () => '<li class="unknown-discovery"><span aria-hidden="true">?</span><strong>未发现的秘密</strong></li>').join("")}
+    </ul>
   </section>`;
 }
 
@@ -459,6 +538,7 @@ function render() {
       item,
       root: main,
       saved,
+      save,
       finish: markCompleted,
       discover,
       thought: rememberThought,
@@ -484,9 +564,10 @@ function openRoute(fromNavigation = false) {
   idleTimer = null;
   drag = null;
   ignoredStarClick = null;
+  boredPress = null;
   if (currentPath === "/") {
-    pressesOnHome = 0;
     chaseCount = 0;
+    chaseCaught = false;
     chaseCooldown = 0;
   }
   if (currentPath === "/random") {
@@ -500,15 +581,10 @@ function openRoute(fromNavigation = false) {
     }
   }
   if (currentPath === "/fortune") {
-    const shared = params.get("task");
-    if (
-      shared !== null &&
-      /^\d+$/.test(shared) &&
-      tasks[Number(shared)] &&
-      taskIndex !== Number(shared)
-    ) {
-      taskIndex = Number(shared);
-      taskDone = false;
+    const linked = fortuneFromLink(saved.fortune, params.get("task"));
+    if (linked !== saved.fortune) {
+      taskIndex = linked.index;
+      taskDone = linked.done;
       saveFortune();
     }
   }
@@ -605,7 +681,28 @@ function updateMotion() {
       word.style.removeProperty("--word-turn");
     });
   }
+  const settingsMotion = $('[data-change="settings-motion"]', dialog);
+  if (settingsMotion) {
+    settingsMotion.checked = saved.settings.motion;
+    $("#system-motion", dialog).textContent = motionQuery.matches
+      ? "系统已开启减少动画。"
+      : "系统动画偏好为默认。";
+  }
   game?.motionChanged();
+}
+
+function setMotionPreference(enabled) {
+  saved.settings.motion = enabled;
+  save();
+  updateMotion();
+}
+
+function setLabSoundPreference(enabled) {
+  saved.settings.labSound = enabled;
+  save();
+  document.querySelectorAll('[data-change="lab-sound"]').forEach((control) => {
+    control.checked = enabled;
+  });
 }
 
 function animateOnce(element, name, duration) {
@@ -632,14 +729,26 @@ function animateOnce(element, name, duration) {
   });
 }
 
-function discover(id) {
-  if (unlocked(id)) return false;
-  saved.discoveries[id] = Date.now();
-  save();
+function showDiscovery(id) {
+  const link = $(".discovery-link");
+  if (link)
+    link.textContent = `你已经发现 ${discoveryCount()} / ${discoveryTotal} 个隐藏彩蛋。`;
   announce("发现彩蛋 · " + discoveries[id].title);
+}
+
+function discover(id) {
+  if (!recordDiscovery(saved, id)) return false;
+  save();
+  showDiscovery(id);
   return true;
 }
 
+function updateHomeCount(id, counter) {
+  const element = $("#" + id + "-count");
+  element.textContent =
+    (id === "hello" ? "已说你好 ×" : "已抓住无聊 ×") + counter.count;
+  animateOnce(element, "count-tick", 260);
+}
 function rememberThought(id) {
   if (!Object.hasOwn(thoughts, id) || Object.hasOwn(saved.thoughts, id)) return;
   saved.thoughts[id] = Date.now();
@@ -712,8 +821,7 @@ async function playChime() {
 async function toggleAmbient(button) {
   if (soundSession?.ambient) {
     stopAmbient();
-    button.textContent = "▷ 一起发呆";
-    button.setAttribute("aria-pressed", "false");
+    updateAmbientControl(button, false);
     return;
   }
   if (button.disabled) return;
@@ -739,13 +847,19 @@ async function toggleAmbient(button) {
       return note;
     });
     soundSession.ambient = { volume, tones };
-    button.textContent = "Ⅱ 暂停发呆音";
-    button.setAttribute("aria-pressed", "true");
+    updateAmbientControl(button, true);
   } catch {
     announce("这个浏览器暂时放不了发呆音。");
   } finally {
     button.disabled = false;
   }
+}
+
+function updateAmbientControl(button, playing) {
+  $(".ambient-label", button).textContent = playing
+    ? "Ⅱ 暂停环境音"
+    : "▷ 播放发呆环境音";
+  button.setAttribute("aria-pressed", String(playing));
 }
 
 function stopAmbient() {
@@ -763,9 +877,27 @@ function stopAmbient() {
   soundSession.ambient = null;
 }
 
-function showDialog(title, html) {
+function showDialog(title, html, trigger = document.activeElement) {
+  if (!dialog.open) dialogTrigger = trigger;
   dialog.innerHTML = `<div class="dialog-top"><h2 id="dialog-title">${title}</h2><button class="icon-button" type="button" data-action="close" aria-label="关闭">×</button></div>${html}`;
   if (!dialog.open) dialog.showModal();
+}
+
+function highlightedTitle(title, query) {
+  if (!query) return esc(title);
+  const literal = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matches = title.matchAll(new RegExp(literal, "giu"));
+  let cursor = 0;
+  let output = "";
+  for (const match of matches) {
+    output +=
+      esc(title.slice(cursor, match.index)) +
+      "<mark>" +
+      esc(match[0]) +
+      "</mark>";
+    cursor = match.index + match[0].length;
+  }
+  return output + esc(title.slice(cursor));
 }
 
 function searchResults(value) {
@@ -784,20 +916,46 @@ function searchResults(value) {
     .filter(
       (entry) =>
         !query ||
-        [entry.title, entry.subtitle, entry.intro]
-          .join(" ")
-          .toLowerCase()
-          .includes(query),
+        [entry.title, entry.subtitle, entry.intro].some((text) =>
+          text?.toLowerCase().includes(query),
+        ),
     )
     .slice(0, 8);
-  $("#search-results").innerHTML = results.length
-    ? results
-        .map(
-          (entry) =>
-            `<a href="${entry.href}"><strong>${entry.title}</strong><small>${entry.subtitle}</small></a>`,
-        )
-        .join("")
-    : "<p>聊绒翻了一遍，暂时没找到。</p>";
+
+  const panel = $("#search-results");
+  $("#search-status").textContent = results.length
+    ? `${results.length} 个结果`
+    : "没找到这个奇怪的东西。";
+  if (results.length) {
+    panel.innerHTML = results
+      .map(
+        (entry) =>
+          `<a href="${esc(entry.href)}"><strong>${highlightedTitle(entry.title, query)}</strong><small>${esc(entry.subtitle)}</small></a>`,
+      )
+      .join("");
+    return;
+  }
+  const keywords = ["土豆", "星星", "按钮", "金鱼"];
+  const popular = ["potato", "star", "fish"]
+    .map(getItem)
+    .filter((entry) => entry && available(entry));
+  panel.innerHTML = `<div class="search-empty"><p>没找到这个奇怪的东西。</p><p>试试这些关键词：</p>
+    <div class="chips">${keywords.map((word) => `<button type="button" data-action="search-keyword" data-id="${esc(word)}">${esc(word)}</button>`).join("")}</div>
+    <div class="search-suggestions" aria-label="热门体验">${popular.map((entry) => `<a href="/random?id=${esc(entry.id)}"><strong>${esc(entry.title)}</strong></a>`).join("")}</div>
+  </div>`;
+}
+
+function showSettings(trigger) {
+  showDialog(
+    "设置",
+    `<div class="settings-options">
+    <label class="sound-check"><input type="checkbox" data-change="settings-motion">减少动画</label>
+    <p id="system-motion"></p>
+    <label class="sound-check"><input type="checkbox" data-change="lab-sound" ${saved.settings.labSound ? "checked" : ""}>实验室提示音</label>
+  </div>`,
+    trigger,
+  );
+  updateMotion();
 }
 
 function certificate() {
@@ -854,24 +1012,29 @@ function syncStars() {
   });
 }
 
+function changeStarCollection(id, button) {
+  const result = toggleStarCollection(saved, id);
+  if (!result) return;
+  syncStars();
+  if (result.collected) {
+    announce("把这颗星星收进罐子了。");
+    animateOnce(button, "star-pop", 420);
+    setMascot("happy");
+    markCompleted("star");
+  } else {
+    announce("这颗星星回到夜空了。");
+    save();
+  }
+  if (result.unlocked) showDiscovery("constellation");
+}
+
 function collectStar(button, event) {
   const id = button.dataset.id;
   if (event?.detail > 0 && ignoredStarClick === id) {
     ignoredStarClick = null;
     return;
   }
-  const star = stars.find((entry) => entry.id === id);
-  if (saved.stars.includes(id)) {
-    announce(star.label + "已经在罐子里了。");
-    return;
-  }
-  saved.stars.push(id);
-  syncStars();
-  announce("把「" + star.label + "」收进了罐子。");
-  animateOnce(button, "star-pop", 420);
-  setMascot("happy");
-  markCompleted("star");
-  if (saved.stars.length === stars.length) discover("constellation");
+  changeStarCollection(id, button);
 }
 
 function saveFortune() {
@@ -909,7 +1072,7 @@ function rollTask(button) {
       taskIndex = next.index;
       taskDone = false;
       saveFortune();
-      history.replaceState(null, "", "/fortune?task=" + taskIndex);
+      history.replaceState(null, "", "/fortune");
       rollTimer = null;
       render();
       $("#task-feedback").textContent = "聊绒把任务递给了你。";
@@ -963,6 +1126,7 @@ function tryDodge(event, now) {
     reduced() ||
     event.pointerType !== "mouse" ||
     chaseCount >= 3 ||
+    chaseCaught ||
     now < chaseCooldown
   )
     return;
@@ -1096,30 +1260,61 @@ function starArea(star) {
 
 const actions = {
   hello(button) {
-    const [mood, line, animation] =
-      helloReplies[Math.min(pressesOnHome++, helloReplies.length - 1)];
+    const counter = recordHomeInteraction(saved, "hello");
+    const reaction = helloReplies[counter.count - 1];
+    const [mood, line, animation] = reaction || [
+      ...mascotLine("home"),
+      "word-pop",
+    ];
     $("#home-reply").textContent = line;
     setMascot(mood);
     animateOnce(button, animation, 440);
-    if (pressesOnHome === 5) {
-      discover("hello");
-      markCompleted("hello");
-    }
+    updateHomeCount("hello", counter);
+    if (counter.count === helloReplies.length) markCompleted("hello");
+    else save();
+    if (counter.unlocked) showDiscovery(counter.unlocked);
   },
   bored(button, event) {
-    const touch = event.detail > 0 && event.pointerType === "touch";
-    if (touch && !reduced() && chaseCount < 2) {
-      const line = ["抓不到我！再点一次。", "你别追了！"][chaseCount++];
-      $("#home-reply").textContent = line;
+    const touch =
+      event.detail > 0 && boredPress?.button === button && boredPress.released;
+    boredPress = null;
+    if (touch && !reduced() && !chaseCaught && chaseCount < 2) {
+      $("#home-reply").textContent = ["抓不到我！再点一次。", "你别追了！"][
+        chaseCount++
+      ];
       animateOnce(button, "hello-flinch", 320);
-      setMascot("running", 700);
+      setMascot("naughty", 700);
       return;
     }
-    chaseCount = 3;
-    $("#home-reply").textContent = "啊！居然被你抓到了！";
+    $("#home-reply").textContent = chaseCount
+      ? "啊！居然被你抓到了！"
+      : "你趁我发呆的时候抓住了！";
+    chaseCount = 0;
+    chaseCaught = true;
     setMascot("happy");
     animateOnce(button, "hello-spark", 440);
+    const counter = recordHomeInteraction(saved, "bored");
+    updateHomeCount("bored", counter);
     markCompleted("bored");
+    if (counter.unlocked) showDiscovery(counter.unlocked);
+  },
+  "dismiss-tip"(button) {
+    const id = button.dataset.id;
+    saved.tipsSeen[id] = true;
+    save();
+    const next = {
+      lab: '[data-action="lab-press"]',
+      space: ".space-star",
+      fortune: '.fortune-intro [data-action="roll"]',
+    };
+    button.closest(".page-tip").remove();
+    $(next[id])?.focus({ preventScroll: true });
+  },
+  "daily-next"() {
+    updateDaily(rotateDailyRecommendation(dailyView), "已换一组推荐。");
+  },
+  "daily-reset"() {
+    updateDaily(getDailyRecommendation(), "已恢复今日推荐。");
   },
   greet() {
     saved.greeted = true;
@@ -1146,21 +1341,27 @@ const actions = {
   secret() {
     navigate("/random?id=secret");
   },
-  search() {
+  search(button) {
     showDialog(
       "搜点无聊的",
-      '<label class="search-form"><span class="sr-only">搜索内容</span><input type="search" id="search" placeholder="试试土豆、星星或按钮…" autofocus></label><div id="search-results"></div>',
+      '<label class="search-form"><span class="sr-only">搜索内容</span><input type="search" id="search" placeholder="试试土豆、星星或按钮…" autofocus></label><p class="sr-only" id="search-status" role="status"></p><div id="search-results"></div>',
+      button,
     );
     searchResults("");
   },
+  "search-keyword"(button) {
+    const input = $("#search");
+    input.value = button.dataset.id;
+    input.focus();
+    searchResults(input.value);
+  },
+  settings: showSettings,
   close() {
     dialog.close();
   },
   motion() {
-    saved.settings.motion = !saved.settings.motion;
-    save();
-    updateMotion();
-    announce(reduced() ? "已减少动画。" : "已恢复动画设置。");
+    setMotionPreference(!saved.settings.motion);
+    announce(reduced() ? "当前已减少动画。" : "已恢复动画设置。");
   },
   next() {
     const next = nextExperience(category) || nextExperience("全部");
@@ -1242,9 +1443,8 @@ const actions = {
   "space-sound": toggleAmbient,
   jar: showJar,
   "release-star"(button) {
-    saved.stars = saved.stars.filter((id) => id !== button.dataset.id);
-    save();
-    syncStars();
+    const id = button.dataset.id;
+    if (saved.stars.includes(id)) changeStarCollection(id);
     showJar();
     $('[data-action="close"]', dialog).focus();
   },
@@ -1347,10 +1547,10 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const control = event.target;
-  if (control.dataset.change === "lab-sound") {
-    saved.settings.labSound = control.checked;
-    save();
-  }
+  if (control.dataset.change === "lab-sound")
+    setLabSoundPreference(control.checked);
+  if (control.dataset.change === "settings-motion")
+    setMotionPreference(control.checked);
   if (control.dataset.change === "random-filter") {
     category = control.value;
     actions.next();
@@ -1401,8 +1601,68 @@ document.addEventListener("submit", (event) => {
   }
 });
 
+function keepFocusedFieldVisible() {
+  const field = document.activeElement;
+  if (
+    !field?.matches(
+      'textarea, input:not([type]), input[type="text"], input[type="search"], input[type="number"]',
+    )
+  )
+    return;
+
+  const viewport = window.visualViewport;
+  const top = viewport?.offsetTop ?? 0;
+  const bottom = top + (viewport?.height ?? window.innerHeight);
+  const rect = field.getBoundingClientRect();
+  if (rect.top >= top + 8 && rect.bottom <= bottom - 8) return;
+
+  field.scrollIntoView({
+    block: "center",
+    inline: "nearest",
+    behavior: "instant",
+  });
+  // Some touch browsers resize only the visual viewport when the keyboard appears.
+  if (!dialog.contains(field)) {
+    const { top: fieldTop, bottom: fieldBottom } =
+      field.getBoundingClientRect();
+    if (fieldBottom > bottom - 8)
+      window.scrollBy({ top: fieldBottom - bottom + 12, behavior: "instant" });
+    else if (fieldTop < top + 8)
+      window.scrollBy({ top: fieldTop - top - 12, behavior: "instant" });
+  }
+}
+
+(window.visualViewport || window).addEventListener(
+  "resize",
+  keepFocusedFieldVisible,
+);
+
 dialog.addEventListener("click", (event) => {
   if (event.target === dialog) dialog.close();
+});
+dialog.addEventListener("keydown", (event) => {
+  // Search fields handle Escape themselves while filled. Close the dialog on that key.
+  if (
+    event.key !== "Escape" ||
+    event.isComposing ||
+    !event.target.matches('input[type="search"]')
+  )
+    return;
+  event.preventDefault();
+  event.stopPropagation();
+  dialog.close();
+});
+dialog.addEventListener("close", () => {
+  if (dialog.open) return;
+  const trigger = dialogTrigger;
+  dialogTrigger = null;
+  if (
+    document.activeElement !== document.body &&
+    !dialog.contains(document.activeElement)
+  )
+    return;
+  if (trigger?.isConnected && trigger.getClientRects().length)
+    trigger.focus({ preventScroll: true });
 });
 
 document.addEventListener("visibilitychange", () => {
@@ -1410,7 +1670,10 @@ document.addEventListener("visibilitychange", () => {
   save();
   clearTimeout(idleTimer);
   idleTimer = null;
-  if (!document.hidden) resetIdle();
+  if (!document.hidden) {
+    resetIdle();
+    refreshDaily();
+  }
 });
 
 document.addEventListener("keydown", (event) => {
@@ -1453,13 +1716,22 @@ document.addEventListener("keydown", (event) => {
 
 document.addEventListener("pointerdown", (event) => {
   activityInput();
+  if (!event.isPrimary || event.button !== 0) return;
+  const bored = event.target.closest(".bored");
+  boredPress =
+    bored && event.pointerType === "touch"
+      ? { button: bored, pointer: event.pointerId, released: false }
+      : null;
   const star = event.target.closest(".space-star");
-  if (!star || !event.isPrimary || event.button !== 0) return;
+  if (!star) return;
   drag = {
     star,
     pointer: event.pointerId,
     x: event.clientX,
     y: event.clientY,
+    original:
+      saved.starPositions[star.dataset.id] ||
+      stars.find((entry) => entry.id === star.dataset.id),
     ...starArea(star),
   };
   ignoredStarClick = null;
@@ -1531,27 +1803,38 @@ document.addEventListener(
 
 function endDrag(event) {
   if (!drag || drag.pointer !== event.pointerId) return;
-  const { star, moved, position } = drag;
+  const { star, moved, position, original } = drag;
   const id = star.dataset.id;
-  star.classList.remove("dragging");
-  if (moved) {
-    ignoredStarClick = id;
-    if (event.type === "pointerup" && position) {
-      saved.starPositions[id] = position;
-      save();
-    } else {
-      starPosition(
-        star,
-        saved.starPositions[id] || stars.find((entry) => entry.id === id),
-      );
-    }
-    setMascot("curious");
-  }
+  const released = event.type === "pointerup";
   drag = null;
+  star.classList.remove("dragging");
+  ignoredStarClick = released && moved ? id : null;
+  if (!moved) return;
+  if (
+    released &&
+    position &&
+    (position.x !== original.x || position.y !== original.y)
+  ) {
+    saved.starPositions[id] = position;
+    save();
+  } else {
+    starPosition(star, original);
+  }
+  setMascot("curious");
 }
 
-document.addEventListener("pointerup", endDrag);
-document.addEventListener("pointercancel", endDrag);
+function endPointer(event) {
+  if (boredPress?.pointer === event.pointerId) {
+    if (event.type === "pointerup" && boredPress.button.contains(event.target))
+      boredPress.released = true;
+    else boredPress = null;
+  }
+  endDrag(event);
+}
+
+document.addEventListener("pointerup", endPointer);
+document.addEventListener("pointercancel", endPointer);
+document.addEventListener("lostpointercapture", endDrag);
 window.addEventListener("popstate", () => openRoute());
 window.addEventListener("pagehide", () => {
   activityClock.visibility(false);
@@ -1574,11 +1857,7 @@ setInterval(() => {
   const before = saved.activeSeconds;
   activityClock.sample();
   if (before !== saved.activeSeconds) save();
-  if (currentPath === "/" && !document.hidden) {
-    const board = $(".daily-board");
-    if (Number(board.dataset.day) !== getDailyRecommendation().day)
-      board.outerHTML = dailySection();
-  }
+  refreshDaily();
 }, 5000);
 activityClock.visibility(!document.hidden);
 openRoute();

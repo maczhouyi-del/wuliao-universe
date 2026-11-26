@@ -16,7 +16,7 @@ function writtenNote(placeholder, label = "写下一句") {
     <button type="submit" class="pill plain">递纸条</button></div></form>`;
 }
 
-export function renderGame(item, reduced, unlocked) {
+export function renderGame(item, manual, unlocked) {
   if (item.unlock && !unlocked(item.unlock)) {
     return '<p>把研究所的按钮按到 50 次，纸箱才会开门。</p><a href="/lab" class="pill plain">去研究所</a>';
   }
@@ -37,9 +37,9 @@ export function renderGame(item, reduced, unlocked) {
     case "fish":
       return `<p class="game-hud"><span>投篮 <strong id="fish-shots">0</strong> / 5</span><span>命中 <strong id="fish-score">0</strong></span></p>
         <div class="fish-court" id="fish-court" aria-hidden="true"><b>🏀</b><span>▤</span></div>
-        <p class="game-hint" id="fish-hint">${reduced ? "把力度调到 40–60，再投篮。" : "球经过中间刻线时投篮。"}</p>
-        <div class="fish-meter" aria-hidden="true" ${reduced ? "hidden" : ""}><i></i></div>
-        <label id="fish-manual" ${reduced ? "" : "hidden"}>投篮力度 <output id="fish-power-value">0</output><input id="fish-power" type="range" min="0" max="100" value="0"></label>
+        <p class="game-hint" id="fish-hint">${manual ? "把力度调到 40–60，再投篮。" : "球经过中间刻线时投篮。"}</p>
+        <div class="fish-meter" aria-hidden="true" ${manual ? "hidden" : ""}><i></i></div>
+        <label id="fish-manual" ${manual ? "" : "hidden"}>投篮力度 <output id="fish-power-value">0</output><input id="fish-power" type="range" min="0" max="100" value="0"></label>
         <div class="game-options">${button("投篮！", "fish")}${button("手动瞄准", "fish-mode")}</div>`;
     case "journal":
       return writtenNote(item.placeholder);
@@ -70,6 +70,7 @@ export function createGame({
   item,
   root,
   saved,
+  save,
   finish,
   discover,
   thought,
@@ -92,7 +93,7 @@ export function createGame({
   let lastPosition = -1;
   let shots = 0;
   let baskets = 0;
-  let manualFish = reduceMotion();
+  const usesManualAim = () => reduceMotion() || saved.settings.fishManual;
   let wasteStart = null;
   let wasted = 0;
 
@@ -211,10 +212,17 @@ export function createGame({
           : catchScore <= 9
             ? "聊绒开始认真了。"
             : "你是不是偷偷练习过？";
+    const previousBest = saved.games.catchBest;
+    const first = saved.games.catchRounds === 0;
     saved.games.catchRounds++;
-    saved.games.catchBest = Math.max(saved.games.catchBest, catchScore);
+    saved.games.catchBest = Math.max(previousBest, catchScore);
     finish(item.id);
-    reply("抓到 " + catchScore + " 次。" + line);
+    const comparison = first
+      ? `这一轮抓到 ${catchScore} 次。这是你的第一份成绩记录。`
+      : catchScore > previousBest
+        ? `这一轮抓到 ${catchScore} 次。新纪录！比上次多抓了 ${catchScore - previousBest} 次！`
+        : `这一轮抓到 ${catchScore} 次，历史最佳是 ${previousBest} 次。`;
+    reply(comparison + line);
     return false;
   }
 
@@ -236,6 +244,7 @@ export function createGame({
   }
 
   function fishMode() {
+    const manualFish = usesManualAim();
     $(".fish-meter").hidden = manualFish;
     $("#fish-manual").hidden = !manualFish;
     $("#fish-hint").textContent = manualFish
@@ -249,28 +258,41 @@ export function createGame({
 
   function shoot(control) {
     if (shots >= 5) return;
-    const field = $(".fish-meter");
-    const bounds = field.getBoundingClientRect();
-    const marker = field.firstElementChild.getBoundingClientRect();
-    const power = manualFish
-      ? Number($("#fish-power").value) / 100
-      : (marker.left + marker.width / 2 - bounds.left) / bounds.width;
-    const hit = manualFish
-      ? power >= 0.4 && power <= 0.6
-      : power >= 0.35 && power <= 0.65;
+    const manualFish = usesManualAim();
+    let hit;
+    if (manualFish) {
+      const power = Number($("#fish-power").value);
+      hit = power >= 40 && power <= 60;
+    } else {
+      const field = $(".fish-meter");
+      const bounds = field.getBoundingClientRect();
+      const marker = field.firstElementChild.getBoundingClientRect();
+      const power =
+        (marker.left + marker.width / 2 - bounds.left) / bounds.width;
+      hit = power >= 0.35 && power <= 0.65;
+    }
     shots++;
     if (hit) baskets++;
     $("#fish-shots").textContent = shots;
     $("#fish-score").textContent = baskets;
     feedback($("#fish-court"), hit ? "fish-hit" : "fish-miss", 440);
     if (shots === 5) {
+      const previousBest = saved.games.fishBest;
+      const first = saved.games.fishRounds === 0;
       saved.games.fishRounds++;
-      saved.games.fishBest = Math.max(saved.games.fishBest, baskets);
+      saved.games.fishBest = Math.max(previousBest, baskets);
       finish(item.id);
       control.textContent = "本轮结束";
       control.setAttribute("aria-disabled", "true");
+      const remark = first
+        ? "金鱼第一次把成绩记在了泡泡上。"
+        : baskets > previousBest
+          ? "新纪录！金鱼已经准备接受采访。"
+          : baskets >= 4
+            ? "未刷新纪录。金鱼觉得自己今天手感很好。"
+            : "未刷新纪录。金鱼打算再练一会儿。";
       reply(
-        `第 5 球${hit ? "命中" : "未进"}。最终成绩 ${baskets} / 5。金鱼已经把比分记在泡泡上了。`,
+        `第 5 球${hit ? "命中" : "未进"}。本轮命中 ${baskets} / 5，历史最佳 ${saved.games.fishBest} / 5。${remark}`,
       );
     } else {
       reply(hit ? "球进了！" : "没进。下一球再调整一下。");
@@ -396,7 +418,9 @@ export function createGame({
     },
     fish: shoot,
     "fish-mode": () => {
-      manualFish = !manualFish;
+      if (reduceMotion()) return;
+      saved.settings.fishManual = !saved.settings.fishManual;
+      save();
       fishMode();
     },
     duck: doDuck,
@@ -427,7 +451,6 @@ export function createGame({
     stop,
     motionChanged() {
       if (item.mode !== "fish") return;
-      if (reduceMotion()) manualFish = true;
       fishMode();
     },
     submit(form) {
