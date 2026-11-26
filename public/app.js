@@ -1,3 +1,5 @@
+import { homeWorlds, startWorld, worldArchive, worldHub, worldShell } from "./microsites.js";
+import { worldByPath, worldSecrets, worldsPath } from "./microsites/catalog.js";
 import {
   categories,
   experiences,
@@ -25,6 +27,9 @@ import {
   readSave,
   recordDiscovery,
   recordHomeInteraction,
+  recordWorldCompletion,
+  recordWorldSecret,
+  recordWorldVisit,
   toggleStarCollection,
   writeSave,
 } from "./state.js";
@@ -79,6 +84,7 @@ const pageNames = {
   "/fortune": "随机命运分配局",
   "/collection": "奇怪合集",
   "/archive": "无聊档案",
+  [worldsPath]: "奇怪小站",
 };
 let currentPath;
 let item;
@@ -93,6 +99,7 @@ let lastPointerSample = 0;
 let lastLoroPeek = -Infinity;
 let labMessage = "试试看。反正按钮自己也很好奇。";
 let game;
+let worldSession;
 let idleTimer;
 let idleMode = 0;
 let idleDeadline = -Infinity;
@@ -121,8 +128,12 @@ function artPanel(experience, lazy = false) {
     : '<span aria-hidden="true">' + experience.icon + "</span>";
 }
 
+function experiencePath(experience) {
+  return experience.type === "微型小站" ? experience.route : "/random?id=" + experience.id;
+}
+
 function card(experience) {
-  return `<a class="experience-card ${experience.color}" href="/random?id=${experience.id}">
+  return `<a class="experience-card ${experience.color}" href="${experiencePath(experience)}">
     <div class="card-art">${artPanel(experience, true)}</div>
     <div class="card-copy"><small>${experience.type} · ${experience.time}</small><h3>${experience.title}</h3><p>${experience.intro}</p></div>
     <span class="card-arrow" aria-hidden="true">↗</span>
@@ -172,6 +183,7 @@ function home() {
     <div class="section-heading"><div><p class="eyeline">✦ 随便点一点</p><h2>今天想浪费一点什么？</h2></div><a class="text-link" href="/collection">逛逛奇怪合集</a></div>
     ${dailySection()}
     <a class="discovery-link text-link" href="/archive#discoveries">你已经发现 ${discoveryCount()} / ${discoveryTotal} 个隐藏彩蛋。</a>
+    ${homeWorlds()}
     <div class="portal-grid">
       <a class="portal pink" href="/lab"><small>无聊实验</small>${art("button", "", true)}<h3>没用的东西研究所</h3><p>这里的实验，一个比一个没用。</p></a>
       <a class="portal purple" href="/space-daze"><small>慢慢来</small>${art("planet", "", true)}<h3>宇宙发呆中心</h3><p>什么都不用做，也挺好的。</p></a>
@@ -420,6 +432,7 @@ function archive() {
     <div class="certificate-strip"><div><h2>${saved.presses >= 28 ? "优秀按钮按压员" : "国际无聊组织认证证书"}</h2><p>今天也给无聊留了一点位置。</p></div><button type="button" class="pill pink" data-action="certificate">领取我的证书</button></div>
     ${archiveTips()}
     ${archiveDiscoveries()}
+    ${worldArchive(saved, esc)}
     ${archiveThoughts()}
     <section id="favorites" class="archive-section"><div class="section-heading"><h2>我的收藏</h2><a href="/collection" class="text-link">去逛合集</a></div>
       ${favoriteItems.length ? '<div class="card-grid">' + favoriteItems.map(card).join("") + "</div>" : '<p class="empty-note">这里还空着。下次玩到喜欢的东西，就把它收进来。</p>'}
@@ -497,6 +510,7 @@ const pages = {
   "/random": randomPage,
   "/collection": collection,
   "/archive": archive,
+  [worldsPath]: worldHub,
 };
 
 function nextExperience(filter) {
@@ -520,10 +534,13 @@ function render() {
   animations.clear();
   game?.stop();
   game = null;
-  main.innerHTML = (pages[currentPath] || missing)();
+  worldSession?.dispose();
+  worldSession = null;
+  const world = worldByPath(currentPath);
+  main.innerHTML = world ? worldShell(world, saved) : (pages[currentPath] || missing)();
   document.documentElement.dataset.page =
     currentPath === "/space-daze" ? "space" : "";
-  document.title = "无聊宇宙 · " + (pageNames[currentPath] || "迷路了");
+  document.title = "无聊宇宙 · " + (world?.title || pageNames[currentPath] || "迷路了");
   document.querySelectorAll(".nav a, .archive-link").forEach((link) => {
     if (link.pathname === currentPath)
       link.setAttribute("aria-current", "page");
@@ -544,6 +561,21 @@ function render() {
       thought: rememberThought,
       reduceMotion: reduced,
       feedback: animateOnce,
+    });
+  }
+  if (world) {
+    worldSession = startWorld(main, world, {
+      reduced,
+      log: saved.microsites,
+      complete(result) {
+        if (recordWorldCompletion(saved, world.id, result)) markCompleted(world.id);
+      },
+      secret(id) {
+        if (!recordWorldSecret(saved, id)) return;
+        save();
+        announce("发现小站秘密 · " + worldSecrets[id]);
+        setMascot("happy");
+      },
     });
   }
   updateMotion();
@@ -587,6 +619,11 @@ function openRoute(fromNavigation = false) {
       taskDone = linked.done;
       saveFortune();
     }
+  }
+  const world = worldByPath(path);
+  if (world) {
+    recordWorldVisit(saved, world.id);
+    save();
   }
   if (dialog.open) dialog.close();
   clearTimeout(notificationTimer);
@@ -689,6 +726,7 @@ function updateMotion() {
       : "系统动画偏好为默认。";
   }
   game?.motionChanged();
+  worldSession?.motionChanged();
 }
 
 function setMotionPreference(enabled) {
@@ -907,7 +945,7 @@ function searchResults(value) {
       .slice(1)
       .map(([href, title]) => ({ href, title, subtitle: "游乐场" })),
     ...experiences.filter(available).map((entry) => ({
-      href: "/random?id=" + entry.id,
+      href: experiencePath(entry),
       title: entry.title,
       subtitle: entry.type,
       intro: entry.intro,
@@ -1401,7 +1439,7 @@ const actions = {
     announce(exists ? "已移出收藏。" : "收进你的无聊档案了。");
   },
   "share-item"() {
-    share(item.title + " · 无聊宇宙", "/random?id=" + item.id);
+    share(item.title + " · 无聊宇宙", experiencePath(item));
   },
   "lab-press": pressLab,
   hat(button) {
@@ -1519,6 +1557,7 @@ document.addEventListener("click", (event) => {
     event.ctrlKey ||
     event.shiftKey ||
     link.target ||
+    link.hasAttribute("download") ||
     link.origin !== location.origin ||
     link.getAttribute("href").startsWith("#")
   )
@@ -1843,6 +1882,8 @@ window.addEventListener("pagehide", () => {
   clearTimeout(rollTimer);
   rollTimer = null;
   game?.stop();
+  worldSession?.dispose();
+  worldSession = null;
   stopAmbient();
   attachMascot(null);
   save();

@@ -3573,3 +3573,156 @@ html.reduce-motion [data-action="space-sound"] .ambient-indicator::after {
     padding-inline: 0.65em;
   }
 }
+
+.home-worlds {
+  margin: 4px 0 36px;
+}
+.worlds-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(80px, 25%);
+  align-items: end;
+  gap: 12px;
+  position: relative;
+  padding: clamp(20px, 5.5vw, 64px);
+  border: 2px solid;
+  margin-bottom: 25px;
+  background:
+    radial-gradient(#28202a35 1px, transparent 1px) 0 0 / 16px 16px,
+    #ecf3be;
+  box-shadow: 5px 6px var(--ink);
+  border-radius: 24px 22px 31px 17px;
+}
+.worlds-banner p:last-child {
+  max-width: 25em;
+  margin-top: 12px;
+}
+.worlds-banner img {
+  max-height: 205px;
+  width: 100%;
+  object-fit: contain;
+  transform: rotate(8deg);
+}
+.world-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(11px, 2vw, 23px);
+}
+.world-tile {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+  min-width: 0;
+  border: 2px solid var(--ink);
+  border-radius: 18px 14px 23px 12px;
+  background: #fffaf0;
+  box-shadow: 3px 4px var(--ink);
+  transition: translate .16s ease;
+}
+.world-tile:hover {
+  translate: 0 -4px;
+}
+.world-cover {
+  position: relative;
+  aspect-ratio: 1.42;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--accent, var(--lime));
+  border-bottom: 2px solid var(--ink);
+}
+.world-cover img {
+  position: absolute;
+  width: 57%;
+  height: 85%;
+  object-fit: contain;
+  rotate: -10deg;
+}
+.world-cover i {
+  position: absolute;
+  width: 69%;
+  aspect-ratio: 1.2;
+  border: 1.5px dashed currentColor;
+  border-radius: 52% 44% 47% 41%;
+  transform: rotate(-15deg);
+}
+.world-cover span,
+.world-cover b {
+  position: absolute;
+  font-size: clamp(1.3rem, 3vw, 3rem);
+  line-height: 1;
+}
+.world-cover span {
+  inset: auto auto 10% 8%;
+  rotate: -9deg;
+}
+.world-cover b {
+  inset: 10% 11% auto auto;
+  rotate: 16deg;
+}
+.cover-cloud-gate {
+  background: radial-gradient(ellipse at 45% 78%, #fff8ef 33%, #f2e5ff 35%, #b7eafa 70%);
+}
+.cover-cloud-gate span {
+  color: #71459e;
+}
+.cover-asteroid {
+  background: radial-gradient(ellipse at 50% 104%, #785caa, #1a2250 68%);
+  color: #fff8c9;
+}
+.cover-asteroid img {
+  width: 66%;
+  rotate: 5deg;
+}
+.cover-comic {
+  background: repeating-linear-gradient(143deg, #ffd7ea 0 13px, #ffdff1 13px 16px);
+}
+.cover-comic i {
+  border: 2px solid;
+  border-radius: 42% 36% 45% 43%;
+  background: #fff6e1;
+}
+.cover-shape-lab {
+  background:
+    radial-gradient(#66534052 1px, transparent 1px) 2px 0 / 13px 13px,
+    #f8f4e9;
+}
+.cover-shape-lab i {
+  width: 45%;
+  aspect-ratio: 1;
+  background: #d7ef53;
+  border: 2px solid;
+  border-radius: 11% 18% 13% 15%;
+  rotate: 10deg;
+}
+.cover-shape-lab span {
+  color: #ff66ad;
+  font-size: clamp(2.9rem, 8vw, 7rem);
+  -webkit-text-stroke: 1px var(--ink);
+  left: 26%;
+  bottom: 10%;
+}
+.world-tile-copy {
+  padding: 11px clamp(10px, 1.8vw, 19px) 16px;
+}
+.world-tile-copy small {
+  color: var(--muted);
+  font-size: .76rem;
+}
+.world-tile-copy h3 {
+  margin: 5px 0;
+  font-weight: 900;
+  font-size: clamp(1.02rem, 1.9vw, 1.55rem);
+}
+.world-tile-copy p {
+  font-size: .88rem;
+}
+.world-found {
+  border-left: 4px solid #8d4283;
+  padding-left: 10px;
+}
+@media (max-width: 850px) {
+  .world-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

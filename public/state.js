@@ -1,4 +1,7 @@
 import {
+  asteroidDuration, cloudRooms, comicEndings, shapeColors, shapeLimit, shapeTypes, worlds, worldSecrets,
+} from "./microsites/catalog.js";
+import {
   discoveries,
   experiences,
   hats,
@@ -88,6 +91,7 @@ export function normalizeSave(input) {
     ),
     favorites: ids(data.favorites, experienceIds),
     visited: ids(data.visited, experienceIds).slice(-6),
+    microsites: normalizeWorldSave(data.microsites),
     planet:
       typeof data.planet === "string" ? data.planet.trim().slice(0, 14) : "",
     planetStyle: {
@@ -153,6 +157,82 @@ export function normalizeSave(input) {
       result.discoveries[milestone.discovery] ??= 0;
   }
   return result;
+}
+
+function worldCounts(input) {
+  const values = object(input);
+  return Object.fromEntries(worlds.map(({ id }) => [id, count(values[id])]));
+}
+
+export function normalizeShapeLayout(input) {
+  const data = object(input);
+  if (!Array.isArray(data.shapes)) return null;
+  const shapes = data.shapes.slice(0, shapeLimit).flatMap((entry) => {
+    const { type, x, y, size, angle, color } = object(entry);
+    if (!exists(shapeTypes, type) || ![x, y, size, angle].every(Number.isFinite)) return [];
+    return [{
+      type, x: clamp(x, 5, 95), y: clamp(y, 5, 95),
+      size: clamp(size, 9, 42), angle: clamp(angle, -180, 180),
+      color: exists(shapeColors, color) ? color : "pink",
+    }];
+  });
+  const name = typeof data.name === "string" ? data.name.trim().slice(0, 30) : "";
+  return { name: name || "无题", shapes };
+}
+
+function asteroidScore(input) {
+  const { stars, ms } = object(input);
+  if (!Number.isSafeInteger(stars) || stars < 0 || stars > 3 || !Number.isFinite(ms) || ms < 0) return null;
+  return { stars, ms: Math.min(asteroidDuration, Math.round(ms)) };
+}
+
+function normalizeWorldSave(input) {
+  const data = object(input);
+  return {
+    visits: worldCounts(data.visits),
+    completions: worldCounts(data.completions),
+    secrets: timestamps(data.secrets, worldSecrets),
+    cloudRooms: ids(data.cloudRooms, cloudRooms.map(({ id }) => id)),
+    asteroidBest: asteroidScore(data.asteroidBest),
+    comicEndings: ids(data.comicEndings, Object.keys(comicEndings)),
+    shapeLayout: normalizeShapeLayout(data.shapeLayout),
+  };
+}
+
+export function recordWorldVisit(save, id) {
+  const counts = save.microsites.visits;
+  if (Object.hasOwn(counts, id)) counts[id] = Math.min(Number.MAX_SAFE_INTEGER, counts[id] + 1);
+}
+
+export function recordWorldCompletion(save, id, result) {
+  const log = save.microsites;
+  if (!Object.hasOwn(log.completions, id)) return false;
+  if (id === "cloud-gate") {
+    if (!cloudRooms.some((room) => room.id === result)) return false;
+    if (!log.cloudRooms.includes(result)) log.cloudRooms.push(result);
+  } else if (id === "asteroid") {
+    const score = asteroidScore(result);
+    if (!score) return false;
+    const best = log.asteroidBest;
+    if (!best || score.stars > best.stars || (score.stars === best.stars && score.ms < best.ms)) {
+      log.asteroidBest = score;
+    }
+  } else if (id === "comic") {
+    if (!exists(comicEndings, result)) return false;
+    if (!log.comicEndings.includes(result)) log.comicEndings.push(result);
+  } else {
+    const layout = normalizeShapeLayout(result);
+    if (!layout) return false;
+    log.shapeLayout = layout;
+  }
+  log.completions[id] = Math.min(Number.MAX_SAFE_INTEGER, log.completions[id] + 1);
+  return true;
+}
+
+export function recordWorldSecret(save, id, time = Date.now()) {
+  if (!exists(worldSecrets, id) || Object.hasOwn(save.microsites.secrets, id)) return false;
+  save.microsites.secrets[id] = time;
+  return true;
 }
 
 export function recordDiscovery(data, id, time = Date.now()) {

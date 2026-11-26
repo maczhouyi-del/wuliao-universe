@@ -13,12 +13,14 @@ export function attachMascot(figure, initial = "idle") {
 }
 
 export function setMascot(mood, duration = 1300) {
-  if (!currentFigure?.isConnected) return;
+  const figure = currentFigure;
+  if (!figure?.isConnected) return;
   clearTimeout(currentTimer);
-  currentFigure.dataset.mood = mood;
+  figure.dataset.mood = mood;
   if (duration > 0) {
     currentTimer = setTimeout(() => {
-      currentFigure.dataset.mood = base;
+      if (figure === currentFigure && figure.isConnected)
+        figure.dataset.mood = base;
     }, duration);
   }
 }
