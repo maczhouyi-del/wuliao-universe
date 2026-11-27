@@ -30,6 +30,11 @@ import {
 } from "./state.js";
 import { createGame, renderGame } from "./games.js";
 import { attachMascot, mascotLine, setMascot } from "./mascot.js";
+import { internetSection, isInternetCollection } from "./external-sites.js";
+import {
+  renderInternetCollection,
+  updateInternetCollection,
+} from "./internet-collection.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const main = $("#main");
@@ -371,24 +376,32 @@ function randomPage() {
   </section>`;
 }
 
-function collection() {
+function collectionExperiences() {
   const shown = experiences.filter(
     (entry) =>
       available(entry) && (category === "全部" || entry.type === category),
   );
   if (order === "热门") shown.sort((a, b) => b.rank - a.rank);
   if (order === "上新顺序") shown.sort((a, b) => b.sequence - a.sequence);
-  return `<section class="body-section collection-page">
-    <div class="section-heading"><div><p class="eyeline">✸ 脑洞存放处</p><h1 class="display"><span class="marker lime">奇怪合集</span></h1><p>收留没有地方可去的奇怪念头。</p></div><a class="pill plain" href="/archive#favorites">看我的收藏</a></div>
-    <div class="collection-controls"><div class="chips" aria-label="按类型筛选">${categories.map((name) => `<button type="button" data-action="collection-filter" data-id="${name}" aria-pressed="${category === name}">${name}</button>`).join("")}</div>
-    <label class="select-label">排序<select data-change="collection-order">${["推荐", "热门", "上新顺序"].map((name) => `<option ${name === order ? "selected" : ""}>${name}</option>`).join("")}</select></label></div>
-    ${mascotGuide("collection", "看到喜欢的，就点星星把它收起来。")}
+  return `${mascotGuide("collection", "看到喜欢的，就点星星把它收起来。")}
     <div class="card-grid">${shown
       .map((entry) => {
         const held = saved.favorites.includes(entry.id);
         return `<div class="collection-tile">${card(entry)}<button type="button" class="favorite-star" data-action="favorite" data-id="${entry.id}" aria-label="${held ? "取消收藏" : "收藏"}${entry.title}" aria-pressed="${held}">${held ? "★" : "☆"}</button></div>`;
       })
-      .join("")}</div>
+      .join("")}</div>`;
+}
+
+function collection() {
+  const params = new URLSearchParams(location.search);
+  const internet = isInternetCollection(params);
+  const active = internet ? internetSection : category;
+  const sort = `<label class="select-label">排序<select data-change="collection-order">${["推荐", "热门", "上新顺序"].map((name) => `<option ${name === order ? "selected" : ""}>${name}</option>`).join("")}</select></label>`;
+  return `<section class="body-section collection-page">
+    <div class="section-heading"><div><p class="eyeline">✸ 脑洞存放处</p><h1 class="display"><span class="marker lime">奇怪合集</span></h1><p>收留没有地方可去的奇怪念头。</p></div><a class="pill plain" href="/archive#favorites">看我的收藏</a></div>
+    <div class="collection-controls"><div class="chips" role="group" aria-label="按类型筛选">${categories.map((name) => `<button type="button" data-action="collection-filter" data-id="${name}" aria-pressed="${active === name}">${name}</button>`).join("")}
+    <button class="collection-internet-tab" type="button" data-action="collection-filter" data-id="${internetSection}" aria-pressed="${internet}">奇妙互联网</button></div>${internet ? "" : sort}</div>
+    ${internet ? renderInternetCollection(params, esc) : collectionExperiences()}
   </section>`;
 }
 
@@ -1481,16 +1494,24 @@ const actions = {
       );
   },
   "collection-filter"(button) {
-    category = button.dataset.id;
-    history.replaceState(
-      null,
-      "",
-      "/collection" +
-        (category === "全部" ? "" : "?type=" + encodeURIComponent(category)),
-    );
-    render();
+    const next = button.dataset.id;
+    const internet = isInternetCollection(new URLSearchParams(location.search));
+    if (next === internetSection) {
+      if (internet) return;
+      navigate(`/collection?section=${internetSection}`);
+    } else {
+      const href =
+        "/collection" +
+        (next === "全部" ? "" : "?type=" + encodeURIComponent(next));
+      if (internet) navigate(href);
+      else {
+        category = next;
+        history.replaceState(null, "", href);
+        render();
+      }
+    }
     [...document.querySelectorAll('[data-action="collection-filter"]')]
-      .find((option) => option.dataset.id === category)
+      .find((option) => option.dataset.id === next)
       ?.focus();
   },
   certificate,
@@ -1541,12 +1562,16 @@ document.addEventListener("input", (event) => {
   activityInput();
   const { id, value } = event.target;
   if (id === "search") searchResults(value);
+  if (id === "internet-name" && !event.isComposing)
+    updateInternetCollection(event.target.form, esc);
   if (id === "fish-power") $("#fish-power-value").value = value;
   if (id === "echo-knob") $("#echo-frequency").value = value;
 });
 
 document.addEventListener("change", (event) => {
   const control = event.target;
+  if (control.form?.id === "internet-filters" && control.name !== "q")
+    updateInternetCollection(control.form, esc);
   if (control.dataset.change === "lab-sound")
     setLabSoundPreference(control.checked);
   if (control.dataset.change === "settings-motion")
@@ -1564,6 +1589,11 @@ document.addEventListener("change", (event) => {
 
 document.addEventListener("submit", (event) => {
   const form = event.target;
+  if (form.id === "internet-filters") {
+    event.preventDefault();
+    updateInternetCollection(form, esc);
+    return;
+  }
   if (!form.dataset.form) return;
   event.preventDefault();
   const data = new FormData(form);
