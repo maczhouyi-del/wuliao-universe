@@ -27,24 +27,46 @@ const motifs = {
     <circle cx="139" cy="58" r="26" class="motif-fill"/><path d="M121 39q27 10 5 42m31-42q-23 20 0 39"/>`,
 };
 
-export function renderExternalCard(site, esc) {
-  const motif = Object.hasOwn(motifs, site.motif) ? site.motif : "grid";
-  return `<article class="random-card external-card" data-motif="${motif}" aria-labelledby="random-title">
-    <div class="external-art" aria-hidden="true">
-      <svg viewBox="0 0 260 130" fill="none" focusable="false">${motifs[motif]}</svg>
-    </div>
-    <div class="random-copy external-copy">
-      <p class="external-kind">奇妙互联网 <span>· ${esc(site.category)}</span></p>
-      <h2 id="random-title" lang="en">${esc(site.title)}</h2>
+const categoryMotifs = {
+  互动小游戏: "court",
+  "3D沉浸世界": "orbit",
+  荒诞趣味: "portal",
+  互动故事: "panels",
+  创意视觉实验: "grid",
+  艺术文化体验: "road",
+};
+
+export function externalMotif(site) {
+  return Object.hasOwn(motifs, site.motif)
+    ? site.motif
+    : categoryMotifs[site.category] || "grid";
+}
+
+export function externalIllustration(site) {
+  return `<svg viewBox="0 0 260 130" fill="none" focusable="false">${motifs[externalMotif(site)]}</svg>`;
+}
+
+export function renderExternalCard(site, esc, held) {
+  const award =
+    site.awwwardsUrl && site.award
+      ? `<a class="text-link external-award" href="${esc(site.awwwardsUrl)}">${esc(site.award)}${site.awardDate ? ` · ${esc(site.awardDate)}` : ""}</a>`
+      : site.referenceUrl
+        ? `<a class="text-link external-award" href="${esc(site.referenceUrl)}">作品来源</a>`
+        : "";
+  return `<article class="external-card site-feature" data-motif="${externalMotif(site)}" aria-labelledby="random-title">
+    <div class="external-art" aria-hidden="true">${externalIllustration(site)}</div>
+    <div class="external-copy">
+      <p class="external-kind">${esc(site.category)}</p>
+      <h2 id="random-title">${esc(site.title)}</h2>
       <p class="external-description">${esc(site.description)}</p>
       <ul class="external-tags">${site.tags.map((tag) => `<li>${esc(tag)}</li>`).join("")}</ul>
       <div class="external-notes">
-        ${site.source ? `<p>来源 · ${esc(site.source)}</p>` : ""}
-        ${site.deviceHint ? `<p>${esc(site.deviceHint)}</p>` : ""}
+        ${award}
+        <p>${[site.experienceType, site.deviceHint, site.requiresSound ? "建议开声音" : "", site.performanceHint].filter(Boolean).map(esc).join(" · ")}</p>
       </div>
-      <div class="external-visit">
-        <a class="pill lime" href="${esc(site.url)}" data-external-site="${esc(site.id)}">进入原网站 <span aria-hidden="true">↗</span></a>
-        <p>即将离开无聊宇宙，前往原网站。</p>
+      <div class="site-feature-actions">
+        <a class="pill lime" href="${esc(site.url)}" data-external-site="${esc(site.id)}">进去看看 <span aria-hidden="true">↗</span></a>
+        <button type="button" class="site-save" data-action="external-favorite" data-id="${esc(site.id)}" aria-pressed="${Boolean(held)}">${held ? "★ 已收藏" : "☆ 收藏网站"}</button>
       </div>
     </div>
   </article>`;

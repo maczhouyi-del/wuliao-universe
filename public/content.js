@@ -220,13 +220,13 @@ export const tasks = [
     type: "site",
     text: "帮一颗土豆思考人生",
     icon: "🥔",
-    route: "/random?id=potato",
+    route: "/experience?id=potato",
   },
   {
     type: "site",
     text: "读一读聊绒藏在标签里的秘密",
     icon: "✧",
-    route: "/random?id=secret",
+    route: "/experience?id=secret",
   },
 ];
 
@@ -326,13 +326,13 @@ const extraTasks = [
   ["idea", "想象你遇见了五分钟后的自己，会说什么？", "✎"],
   ["idea", "给一条丢了搭档的袜子起个电影名", "★"],
   ["idea", "设计一个上班第一天就放假的职位", "✶"],
-  ["site", "抓住一次到处乱跑的聊绒", "✦", "/random?id=catch"],
+  ["site", "抓住一次到处乱跑的聊绒", "✦", "/experience?id=catch"],
   ["site", "去研究所按一次不该按的按钮", "●", "/lab"],
-  ["site", "帮金鱼投完一轮篮球", "🐟", "/random?id=fish"],
+  ["site", "帮金鱼投完一轮篮球", "🐟", "/experience?id=fish"],
   ["site", "在随机玩意里找到一件想收藏的东西", "☆", "/random"],
-  ["site", "给路过的云写一句日记", "☁", "/random?id=cloud"],
+  ["site", "给路过的云写一句日记", "☁", "/experience?id=cloud"],
   ["site", "给一颗无名星球起个名字", "◉", "/space-daze"],
-  ["site", "在门后找到一个新房间", "🚪", "/random?id=door"],
+  ["site", "在门后找到一个新房间", "🚪", "/experience?id=door"],
 ];
 tasks.push(
   ...extraTasks.map(([type, text, icon, route]) => ({

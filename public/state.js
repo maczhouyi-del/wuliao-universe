@@ -13,6 +13,7 @@ import {
   thoughts,
 } from "./content.js";
 import { externalSites, getExternalSite } from "./external-sites.js";
+import { recentDrawLimit } from "./random-explore.js";
 
 export const storageKey = "wuliao-universe-v1";
 const object = (value) =>
@@ -96,6 +97,10 @@ export function normalizeSave(input) {
     visited: ids(data.visited, experienceIds),
     externalFavorites: ids(data.externalFavorites, externalSiteIds),
     externalVisited: externalHistory.slice(-externalHistoryLimit),
+    externalExplored: ids(data.externalExplored, externalSiteIds),
+    externalDraws: ids(data.externalDraws, externalSiteIds).slice(
+      -recentDrawLimit,
+    ),
     externalSeen: [
       ...new Set([
         ...ids(data.externalSeen, externalSiteIds),
@@ -186,7 +191,10 @@ export function toggleExternalFavorite(data, id) {
 }
 
 export function recordExternalVisit(data, id) {
-  if (!getExternalSite(id) || data.externalVisited.at(-1) === id) return false;
+  if (!getExternalSite(id)) return false;
+  const first = !data.externalExplored.includes(id);
+  if (first) data.externalExplored.push(id);
+  if (data.externalVisited.at(-1) === id) return first;
   data.externalVisited = [
     ...data.externalVisited
       .filter((entry) => entry !== id)
@@ -194,6 +202,15 @@ export function recordExternalVisit(data, id) {
     id,
   ];
   if (!data.externalSeen.includes(id)) data.externalSeen.push(id);
+  return true;
+}
+
+export function recordExternalDraw(data, id) {
+  if (!getExternalSite(id)) return false;
+  data.externalDraws = [
+    ...data.externalDraws.filter((entry) => entry !== id),
+    id,
+  ].slice(-recentDrawLimit);
   return true;
 }
 

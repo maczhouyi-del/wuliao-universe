@@ -1,5 +1,4 @@
 import {
-  categories,
   experiences,
   taskCategories,
   tasks,
@@ -23,6 +22,7 @@ import {
   fortuneFromLink,
   limitStar,
   readSave,
+  recordExternalDraw,
   recordDiscovery,
   recordExternalVisit,
   recordHomeInteraction,
@@ -33,17 +33,8 @@ import {
 import { createGame, renderGame } from "./games.js";
 import { attachMascot, mascotLine, setMascot } from "./mascot.js";
 import { getExternalSite, publishedSites } from "./external-sites.js";
-import { renderExternalCard } from "./external-card.js";
-import {
-  drawRandomContent,
-  externalFilter,
-  legacyCollectionHref,
-  originalsFilter,
-  randomHref,
-  randomResultFromLink,
-  readRandomFilter,
-  sameRandomResult,
-} from "./random-explore.js";
+import { mountSiteDiscovery, renderSiteDiscovery } from "./site-discovery.js";
+import { drawExternalSite, randomHref } from "./random-explore.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const main = $("#main");
@@ -88,6 +79,7 @@ function art(name, css = "", lazy = false) {
 const pageNames = {
   "/": "互联网发呆游乐场",
   "/random": "随机玩意",
+  "/experience": "原创体验",
   "/lab": "没用的东西研究所",
   "/space-daze": "宇宙发呆中心",
   "/fortune": "随机命运分配局",
@@ -95,8 +87,8 @@ const pageNames = {
 };
 let currentPath;
 let item;
-let randomResult;
-let randomFilter = "";
+let currentSite;
+let siteDiscovery;
 let dailyView = getDailyRecommendation();
 let chaseCount = 0;
 let chaseCaught = false;
@@ -135,7 +127,7 @@ function artPanel(experience, lazy = false) {
 }
 
 function card(experience) {
-  return `<a class="experience-card ${experience.color}" href="/random?id=${experience.id}">
+  return `<a class="experience-card ${experience.color}" href="/experience?id=${experience.id}">
     <div class="card-art">${artPanel(experience, true)}</div>
     <div class="card-copy"><small>${experience.type} · ${experience.time}</small><h3>${experience.title}</h3><p>${experience.intro}</p></div>
     <span class="card-arrow" aria-hidden="true">↗</span>
@@ -195,8 +187,8 @@ function home() {
 
 function dailyLinks(daily) {
   return `
-    <a href="/random?id=${daily.game}"><small>今日小游戏</small><strong>${getItem(daily.game).title}</strong></a>
-    <a href="/random?id=${daily.question[1]}"><small>今日奇怪问题</small><strong>${daily.question[0]}</strong></a>
+    <a href="/experience?id=${daily.game}"><small>今日小游戏</small><strong>${getItem(daily.game).title}</strong></a>
+    <a href="/experience?id=${daily.question[1]}"><small>今日奇怪问题</small><strong>${daily.question[0]}</strong></a>
     <a href="/fortune?task=${daily.task}"><small>今日随机任务</small><strong>${tasks[daily.task].text}</strong></a>
     <div><small>聊绒今日心情</small><strong>${daily.mood}</strong></div>`;
 }
@@ -266,7 +258,7 @@ function lab() {
       </aside>
     </div>
     <div class="experiment-status" role="status" id="lab-status">${esc(labMessage)}</div>
-    <div class="section-heading lab-heading"><h2><span class="marker lime">精选实验</span></h2><a class="text-link" href="${randomHref(null, "无聊实验")}">随机抽个实验</a></div>
+    <div class="section-heading lab-heading"><h2><span class="marker lime">精选实验</span></h2><a class="text-link" href="/experience?id=waste">去试试时间机器</a></div>
     <div class="card-grid lab-cards">${["potato", "door", "fish", "cloud", "refuse", "waste", "calculator"].map((id) => card(getItem(id))).join("")}
       <div id="lab-echo" class="lab-unlock" ${unlocked("lab-echo") ? "" : "hidden"}>${card(getItem("echo"))}</div>
     </div>
@@ -363,30 +355,17 @@ function fortune() {
 }
 
 function randomPage() {
-  const site =
-    randomResult?.kind === "external-site"
-      ? getExternalSite(randomResult.id)
-      : null;
-  const originalActions = item && available(item);
-  const held = site && saved.externalFavorites.includes(site.id);
-  const filterOptions = [
-    ["", "全部体验"],
-    [originalsFilter, "本站小游戏"],
-    [externalFilter, "奇妙互联网"],
-    ...categories.slice(1).map((type) => [type, type]),
-  ];
+  return renderSiteDiscovery(publishedSites.length);
+}
+
+function experiencePage() {
   return `<section class="body-section random-page">
-    <div class="section-heading">
-      <div><h1 class="display"><span class="marker lime">随机玩意</span></h1><p>不知道玩什么？交给运气。</p></div>
-      <label class="select-label">选个类型<select data-change="random-filter">${filterOptions.map(([value, label]) => `<option value="${value}"${value === randomFilter ? " selected" : ""}>${label}</option>`).join("")}</select></label>
-    </div>
-    ${site ? renderExternalCard(site, esc) : item ? renderRandomExperience() : '<div class="random-empty"><h2>这个类型暂时空空的。</h2><p>换个类型，再找找别的奇怪东西。</p></div>'}
+    <div class="section-heading"><div><h1 class="display"><span class="marker lime">原创体验</span></h1><p>无聊宇宙自己做的小玩意。</p></div></div>
+    ${item ? renderRandomExperience() : '<div class="random-empty"><h2>没找到这项原创体验。</h2><p>可以回首页看看其他实验或小游戏。</p></div>'}
     <div class="random-actions">
-      <button class="pill pink" type="button" data-action="next"${randomResult ? "" : " disabled"}>再来一个奇怪的东西 <span aria-hidden="true">✦</span></button>
-      ${site ? `<button class="pill plain" type="button" data-action="external-favorite" data-id="${esc(site.id)}" aria-pressed="${Boolean(held)}">${held ? "★ 已收藏网站" : "☆ 收藏这个网站"}</button>` : ""}
-      ${originalActions && item.replay ? '<button type="button" class="pill plain" data-action="retry">再玩一次</button>' : ""}
-      ${originalActions && item.favorite ? `<button type="button" class="pill plain" data-action="favorite" data-id="${item.id}" aria-pressed="${saved.favorites.includes(item.id)}">${saved.favorites.includes(item.id) ? "★ 已收藏" : "☆ 收藏这个"}</button>` : ""}
-      ${originalActions && item.share ? '<button type="button" class="text-button" data-action="share-item">分享给朋友</button>' : ""}
+      ${item && available(item) && item.replay ? '<button type="button" class="pill plain" data-action="retry">再玩一次</button>' : ""}
+      ${item && available(item) && item.favorite ? `<button type="button" class="pill plain" data-action="favorite" data-id="${item.id}" aria-pressed="${saved.favorites.includes(item.id)}">${saved.favorites.includes(item.id) ? "★ 已收藏" : "☆ 收藏这个"}</button>` : ""}
+      ${item && available(item) && item.share ? '<button type="button" class="text-button" data-action="share-item">分享给朋友</button>' : ""}
       <a class="text-link" href="/archive">看我的档案</a>
     </div>
   </section>`;
@@ -429,6 +408,7 @@ function archive() {
     [duration, "活跃时长"],
     [saved.games.catchBest, "抓聊绒最高分"],
     [saved.games.fishBest + " / 5", "金鱼投篮最好成绩"],
+    [saved.externalExplored.length, "已探索的网站"],
     [count, "隐藏发现"],
   ];
   return `<section class="body-section archive-page">
@@ -443,7 +423,7 @@ function archive() {
       ${favoriteItems.length ? '<div class="card-grid">' + favoriteItems.map(card).join("") + "</div>" : '<p class="empty-note">这里还空着。下次玩到喜欢的东西，就把它收进来。</p>'}
     </section>
     ${archiveSites("收藏的外部网站", "external-favorites", saved.externalFavorites, "下次抽到喜欢的网站，就把它收进来。")}
-    ${archiveSites("最近遇到的网站", "external-history", saved.externalVisited, "逛逛随机玩意，看看能遇到什么网站。")}
+    ${archiveSites("最近访问的网站", "external-history", saved.externalVisited, "在随机玩意打开一个原网站，就会记在这里。")}
   </section>`;
 }
 
@@ -485,8 +465,8 @@ function archiveDiscoveries() {
             time,
           ]) => `<li><strong>${discoveries[id].title}</strong><p>${discoveries[id].reward}</p>
       <small>${time ? `<time datetime="${new Date(time).toISOString()}">${date.format(time)}</time>` : "旧版存档未记录时间"}</small>
-      ${id === "lab-echo" ? '<a class="text-link" href="/random?id=echo">收听电台</a>' : ""}
-      ${id === "door-person" ? '<a class="text-link" href="/random?id=door">回门边看看</a>' : ""}</li>`,
+      ${id === "lab-echo" ? '<a class="text-link" href="/experience?id=echo">收听电台</a>' : ""}
+      ${id === "door-person" ? '<a class="text-link" href="/experience?id=door">回门边看看</a>' : ""}</li>`,
         )
         .join("")}
       ${Array.from({ length: pending }, () => '<li class="unknown-discovery"><span aria-hidden="true">?</span><strong>未发现的秘密</strong></li>').join("")}
@@ -515,18 +495,15 @@ const pages = {
   "/space-daze": space,
   "/fortune": fortune,
   "/random": randomPage,
+  "/experience": experiencePage,
   "/archive": archive,
 };
 
-function drawForFilter(filter) {
-  return drawRandomContent({
-    filter,
-    current: randomResult,
-    available,
-    visited: saved.visited,
-    externalVisited: saved.externalVisited,
-    externalSeen: saved.externalSeen,
-  });
+function selectExternalSite(id) {
+  currentSite = id;
+  const href = randomHref(id);
+  if (href !== location.pathname + location.search)
+    history.replaceState(history.state, "", href + location.hash);
 }
 
 function render() {
@@ -535,6 +512,8 @@ function render() {
     clearTimeout(animation.timer);
   }
   animations.clear();
+  siteDiscovery?.stop();
+  siteDiscovery = null;
   game?.stop();
   game = null;
   main.innerHTML = (pages[currentPath] || missing)();
@@ -550,7 +529,7 @@ function render() {
     $("[data-mascot]", main),
     currentPath === "/space-daze" ? "companion" : "idle",
   );
-  if (currentPath === "/random" && item && available(item)) {
+  if (currentPath === "/experience" && item && available(item)) {
     game = createGame({
       item,
       root: main,
@@ -563,19 +542,41 @@ function render() {
       feedback: animateOnce,
     });
   }
+  if (currentPath === "/random") {
+    siteDiscovery = mountSiteDiscovery($("[data-discovery]", main), {
+      sites: publishedSites,
+      initial: currentSite,
+      esc,
+      saved,
+      reduced,
+      select: selectExternalSite,
+      draw: () => drawExternalSite(saved.externalDraws),
+      record(id) {
+        recordExternalDraw(saved, id);
+        save();
+      },
+    });
+  }
   updateMotion();
   resetIdle();
 }
 
 function openRoute(fromNavigation = false) {
   let path = location.pathname.replace(/\/$/, "") || "/";
-  if (path === "/collection") {
+  const earlierParams = new URLSearchParams(location.search);
+  if (
+    path === "/collection" ||
+    (path === "/random" &&
+      earlierParams.has("id") &&
+      !earlierParams.has("site"))
+  ) {
+    const id = earlierParams.get("id");
+    path = path === "/random" ? "/experience" : "/random";
     history.replaceState(
       history.state,
       "",
-      legacyCollectionHref(new URLSearchParams(location.search)),
+      path === "/experience" ? path + "?" + new URLSearchParams({ id }) : path,
     );
-    path = "/random";
   }
   if (currentPath === "/space-daze" && path !== currentPath) stopAmbient();
   currentPath = path;
@@ -593,26 +594,16 @@ function openRoute(fromNavigation = false) {
     chaseCooldown = 0;
   }
   if (currentPath === "/random") {
-    randomFilter = readRandomFilter(params.get("type"));
-    randomResult =
-      randomResultFromLink(params, randomFilter) ?? drawForFilter(randomFilter);
-    item =
-      randomResult?.kind === "experience" ? getItem(randomResult.id) : null;
-    const href = randomHref(randomResult, randomFilter);
-    if (href !== location.pathname + location.search)
-      history.replaceState(history.state, "", href + location.hash);
-    if (item && available(item) && saved.visited.at(-1) !== item.id) {
-      saved.visited = [
-        ...saved.visited.filter((id) => id !== item.id),
-        item.id,
-      ];
-      save();
-    }
-    if (
-      randomResult?.kind === "external-site" &&
-      recordExternalVisit(saved, randomResult.id)
-    )
-      save();
+    currentSite = (
+      getExternalSite(params.get("site")) ??
+      drawExternalSite(saved.externalDraws)
+    )?.id;
+    selectExternalSite(currentSite);
+  }
+  item = currentPath === "/experience" ? getItem(params.get("id")) : null;
+  if (item && available(item) && saved.visited.at(-1) !== item.id) {
+    saved.visited = [...saved.visited.filter((id) => id !== item.id), item.id];
+    save();
   }
   if (currentPath === "/fortune") {
     const linked = fortuneFromLink(saved.fortune, params.get("task"));
@@ -640,12 +631,6 @@ function openRoute(fromNavigation = false) {
 function navigate(href) {
   history.pushState(null, "", href);
   openRoute(true);
-}
-
-function openRandomResult(result, filter, focusSelector) {
-  navigate(randomHref(result, filter));
-  animateOnce($(".random-card", main), "random-swap", 200);
-  $(focusSelector, main)?.focus({ preventScroll: true });
 }
 
 function announce(message) {
@@ -729,6 +714,7 @@ function updateMotion() {
       : "系统动画偏好为默认。";
   }
   game?.motionChanged();
+  siteDiscovery?.motionChanged();
 }
 
 function setMotionPreference(enabled) {
@@ -947,14 +933,14 @@ function searchResults(value) {
       .slice(1)
       .map(([href, title]) => ({ href, title, subtitle: "游乐场" })),
     ...experiences.filter(available).map((entry) => ({
-      href: "/random?id=" + entry.id,
+      href: "/experience?id=" + entry.id,
       title: entry.title,
       subtitle: entry.type,
       intro: entry.intro,
     })),
     ...(query
       ? publishedSites.map((site) => ({
-          href: randomHref({ kind: "external-site", id: site.id }),
+          href: randomHref(site.id),
           title: site.title,
           subtitle: "奇妙互联网 · " + site.category,
           intro: [site.description, ...site.tags].join(" "),
@@ -989,7 +975,7 @@ function searchResults(value) {
     .filter((entry) => entry && available(entry));
   panel.innerHTML = `<div class="search-empty"><p>没找到这个奇怪的东西。</p><p>试试这些关键词：</p>
     <div class="chips">${keywords.map((word) => `<button type="button" data-action="search-keyword" data-id="${esc(word)}">${esc(word)}</button>`).join("")}</div>
-    <div class="search-suggestions" aria-label="热门体验">${popular.map((entry) => `<a href="/random?id=${esc(entry.id)}"><strong>${esc(entry.title)}</strong></a>`).join("")}</div>
+    <div class="search-suggestions" aria-label="热门体验">${popular.map((entry) => `<a href="/experience?id=${esc(entry.id)}"><strong>${esc(entry.title)}</strong></a>`).join("")}</div>
   </div>`;
 }
 
@@ -1387,7 +1373,7 @@ const actions = {
     if (status) status.textContent = line;
   },
   secret() {
-    navigate("/random?id=secret");
+    navigate("/experience?id=secret");
   },
   search(button) {
     showDialog(
@@ -1410,15 +1396,6 @@ const actions = {
   motion() {
     setMotionPreference(!saved.settings.motion);
     announce(reduced() ? "当前已减少动画。" : "已恢复动画设置。");
-  },
-  next() {
-    const next = drawForFilter(randomFilter);
-    if (!next) return;
-    if (sameRandomResult(next, randomResult)) {
-      announce("这个类型暂时只有这一项。");
-      return;
-    }
-    openRandomResult(next, randomFilter, '[data-action="next"]');
   },
   retry() {
     render();
@@ -1445,11 +1422,11 @@ const actions = {
     if (added === null) return;
     save();
     button.setAttribute("aria-pressed", String(added));
-    button.textContent = added ? "★ 已收藏网站" : "☆ 收藏这个网站";
+    button.textContent = added ? "★ 已收藏" : "☆ 收藏网站";
     announce(added ? "收进你的无聊档案了。" : "网站已移出收藏。");
   },
   "share-item"() {
-    share(item.title + " · 无聊宇宙", "/random?id=" + item.id);
+    share(item.title + " · 无聊宇宙", "/experience?id=" + item.id);
   },
   "lab-press": pressLab,
   hat(button) {
@@ -1592,14 +1569,6 @@ document.addEventListener("change", (event) => {
     setLabSoundPreference(control.checked);
   if (control.dataset.change === "settings-motion")
     setMotionPreference(control.checked);
-  if (control.dataset.change === "random-filter") {
-    const filter = readRandomFilter(control.value);
-    openRandomResult(
-      drawForFilter(filter),
-      filter,
-      '[data-change="random-filter"]',
-    );
-  }
 });
 
 document.addEventListener("submit", (event) => {
@@ -1883,6 +1852,8 @@ window.addEventListener("pagehide", () => {
   clearTimeout(rollTimer);
   rollTimer = null;
   game?.stop();
+  siteDiscovery?.stop();
+  siteDiscovery = null;
   stopAmbient();
   attachMascot(null);
   save();
