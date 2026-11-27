@@ -1,5 +1,3 @@
-import { worlds, worldPath } from "./microsites/catalog.js";
-
 export const categories = [
   "全部",
   "无聊实验",
@@ -8,7 +6,6 @@ export const categories = [
   "趣味生成器",
   "隐藏彩蛋",
   "奇怪故事",
-  "微型小站",
 ];
 
 const originalExperiences = [
@@ -303,14 +300,7 @@ const gameTypes = {
   echo: "echo",
 };
 
-const worldExperiences = worlds.map((world) => ({
-  ...world,
-  type: "微型小站",
-  route: worldPath(world.id),
-  rank: 8,
-}));
-
-export const experiences = [...originalExperiences, ...newExperiences, ...worldExperiences].map(
+export const experiences = [...originalExperiences, ...newExperiences].map(
   (entry, index) => ({
     difficulty: "轻松",
     mode: entry.route ? "link" : gameTypes[entry.id] || "reveal",
