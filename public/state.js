@@ -12,6 +12,7 @@ import {
   tasks,
   thoughts,
 } from "./content.js";
+import { externalSites, getExternalSite } from "./external-sites.js";
 
 export const storageKey = "wuliao-universe-v1";
 const object = (value) =>
@@ -28,6 +29,8 @@ const ids = (value, options) =>
     : [];
 const starIds = stars.map(({ id }) => id);
 const experienceIds = experiences.map(({ id }) => id);
+const externalSiteIds = externalSites.map(({ id }) => id);
+const externalHistoryLimit = 12;
 const activityIds = [
   ...experienceIds,
   "hello",
@@ -70,6 +73,9 @@ export function normalizeSave(input) {
   const settings = object(data.settings);
   const homeCounters = object(data.homeCounters);
   const tipsSeen = object(data.tipsSeen);
+  const externalHistory = Array.isArray(data.externalVisited)
+    ? ids(data.externalVisited.slice().reverse(), externalSiteIds).reverse()
+    : [];
   const result = {
     presses: count(data.presses),
     potatoes: count(data.potatoes),
@@ -87,7 +93,15 @@ export function normalizeSave(input) {
       }),
     ),
     favorites: ids(data.favorites, experienceIds),
-    visited: ids(data.visited, experienceIds).slice(-6),
+    visited: ids(data.visited, experienceIds),
+    externalFavorites: ids(data.externalFavorites, externalSiteIds),
+    externalVisited: externalHistory.slice(-externalHistoryLimit),
+    externalSeen: [
+      ...new Set([
+        ...ids(data.externalSeen, externalSiteIds),
+        ...externalHistory,
+      ]),
+    ],
     planet:
       typeof data.planet === "string" ? data.planet.trim().slice(0, 14) : "",
     planetStyle: {
@@ -159,6 +173,27 @@ export function recordDiscovery(data, id, time = Date.now()) {
   if (!Object.hasOwn(discoveries, id) || Object.hasOwn(data.discoveries, id))
     return false;
   data.discoveries[id] = time;
+  return true;
+}
+
+export function toggleExternalFavorite(data, id) {
+  if (!getExternalSite(id)) return null;
+  const added = !data.externalFavorites.includes(id);
+  data.externalFavorites = added
+    ? [...data.externalFavorites, id]
+    : data.externalFavorites.filter((favorite) => favorite !== id);
+  return added;
+}
+
+export function recordExternalVisit(data, id) {
+  if (!getExternalSite(id) || data.externalVisited.at(-1) === id) return false;
+  data.externalVisited = [
+    ...data.externalVisited
+      .filter((entry) => entry !== id)
+      .slice(1 - externalHistoryLimit),
+    id,
+  ];
+  if (!data.externalSeen.includes(id)) data.externalSeen.push(id);
   return true;
 }
 

@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/serve.mjs",
-    "check": "node --check public/app.js && node --check public/content.js && node --check public/external-sites.js && node --check public/internet-collection.js && node --check public/games.js && node --check public/mascot.js && node --check public/state.js && node --check scripts/serve.mjs",
+    "check": "node --check public/app.js && node --check public/content.js && node --check public/external-sites.js && node --check public/external-card.js && node --check public/random-explore.js && node --check public/games.js && node --check public/mascot.js && node --check public/state.js && node --check scripts/serve.mjs",
     "deploy": "wrangler deploy",
     "test": "node --test"
   },

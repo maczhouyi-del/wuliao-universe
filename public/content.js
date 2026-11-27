@@ -329,7 +329,7 @@ const extraTasks = [
   ["site", "抓住一次到处乱跑的聊绒", "✦", "/random?id=catch"],
   ["site", "去研究所按一次不该按的按钮", "●", "/lab"],
   ["site", "帮金鱼投完一轮篮球", "🐟", "/random?id=fish"],
-  ["site", "在奇怪合集中找到一件想收藏的东西", "☆", "/collection"],
+  ["site", "在随机玩意里找到一件想收藏的东西", "☆", "/random"],
   ["site", "给路过的云写一句日记", "☁", "/random?id=cloud"],
   ["site", "给一颗无名星球起个名字", "◉", "/space-daze"],
   ["site", "在门后找到一个新房间", "🚪", "/random?id=door"],
@@ -503,10 +503,6 @@ export const mascotLines = {
   fortune: [
     ["curious", "要不要让机器替你做个小决定？"],
     ["naughty", "我没有偷偷调过概率。大概。"],
-  ],
-  collection: [
-    ["curious", "试试看能不能翻到一件想带走的东西。"],
-    ["naughty", "里面有见不得人的奇怪借口。"],
   ],
 };
 

@@ -24,17 +24,26 @@ import {
   limitStar,
   readSave,
   recordDiscovery,
+  recordExternalVisit,
   recordHomeInteraction,
+  toggleExternalFavorite,
   toggleStarCollection,
   writeSave,
 } from "./state.js";
 import { createGame, renderGame } from "./games.js";
 import { attachMascot, mascotLine, setMascot } from "./mascot.js";
-import { internetSection, isInternetCollection } from "./external-sites.js";
+import { getExternalSite, publishedSites } from "./external-sites.js";
+import { renderExternalCard } from "./external-card.js";
 import {
-  renderInternetCollection,
-  updateInternetCollection,
-} from "./internet-collection.js";
+  drawRandomContent,
+  externalFilter,
+  legacyCollectionHref,
+  originalsFilter,
+  randomHref,
+  randomResultFromLink,
+  readRandomFilter,
+  sameRandomResult,
+} from "./random-explore.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const main = $("#main");
@@ -82,13 +91,12 @@ const pageNames = {
   "/lab": "没用的东西研究所",
   "/space-daze": "宇宙发呆中心",
   "/fortune": "随机命运分配局",
-  "/collection": "奇怪合集",
   "/archive": "无聊档案",
 };
 let currentPath;
 let item;
-let category = "全部";
-let order = "推荐";
+let randomResult;
+let randomFilter = "";
 let dailyView = getDailyRecommendation();
 let chaseCount = 0;
 let chaseCaught = false;
@@ -174,7 +182,7 @@ function home() {
     </div>
   </section>
   <section id="playground" class="body-section playground">
-    <div class="section-heading"><div><p class="eyeline">✦ 随便点一点</p><h2>今天想浪费一点什么？</h2></div><a class="text-link" href="/collection">逛逛奇怪合集</a></div>
+    <div class="section-heading"><div><p class="eyeline">✦ 随便点一点</p><h2>今天想浪费一点什么？</h2></div><a class="text-link" href="/random">发现随机玩意</a></div>
     ${dailySection()}
     <a class="discovery-link text-link" href="/archive#discoveries">你已经发现 ${discoveryCount()} / ${discoveryTotal} 个隐藏彩蛋。</a>
     <div class="portal-grid">
@@ -258,7 +266,7 @@ function lab() {
       </aside>
     </div>
     <div class="experiment-status" role="status" id="lab-status">${esc(labMessage)}</div>
-    <div class="section-heading lab-heading"><h2><span class="marker lime">精选实验</span></h2><a class="text-link" href="/collection?type=无聊实验">查看实验合集</a></div>
+    <div class="section-heading lab-heading"><h2><span class="marker lime">精选实验</span></h2><a class="text-link" href="${randomHref(null, "无聊实验")}">随机抽个实验</a></div>
     <div class="card-grid lab-cards">${["potato", "door", "fish", "cloud", "refuse", "waste", "calculator"].map((id) => card(getItem(id))).join("")}
       <div id="lab-echo" class="lab-unlock" ${unlocked("lab-echo") ? "" : "hidden"}>${card(getItem("echo"))}</div>
     </div>
@@ -355,53 +363,50 @@ function fortune() {
 }
 
 function randomPage() {
-  if (!item)
-    return `<section class="body-section empty"><h1 class="display">随机玩意</h1><p>这个分类暂时空空的。</p><button class="pill pink" data-action="next">随便来一个</button></section>`;
+  const site =
+    randomResult?.kind === "external-site"
+      ? getExternalSite(randomResult.id)
+      : null;
+  const originalActions = item && available(item);
+  const held = site && saved.externalFavorites.includes(site.id);
+  const filterOptions = [
+    ["", "全部体验"],
+    [originalsFilter, "本站小游戏"],
+    [externalFilter, "奇妙互联网"],
+    ...categories.slice(1).map((type) => [type, type]),
+  ];
   return `<section class="body-section random-page">
-    <div class="section-heading"><div><p class="eyeline">✦ 随机探索</p><h1 class="display"><span class="marker lime">随机玩意</span></h1></div><label class="select-label">选个类型<select data-change="random-filter">${categories.map((name) => `<option ${name === category ? "selected" : ""}>${name}</option>`).join("")}</select></label></div>
-    <article class="random-card ${item.color}">
-      <div class="random-art">${artPanel(item)}${posterMark()}</div>
-      <div class="random-copy"><small>${item.type} · ${item.time} · ${item.difficulty}</small><h2>${item.title}</h2><p>${item.intro}</p>
-        ${renderGame(item, reduced() || saved.settings.fishManual, unlocked)}
-        <p class="result" id="activity-result" role="status"></p>
-      </div>
-    </article>
+    <div class="section-heading">
+      <div><h1 class="display"><span class="marker lime">随机玩意</span></h1><p>不知道玩什么？交给运气。</p></div>
+      <label class="select-label">选个类型<select data-change="random-filter">${filterOptions.map(([value, label]) => `<option value="${value}"${value === randomFilter ? " selected" : ""}>${label}</option>`).join("")}</select></label>
+    </div>
+    ${site ? renderExternalCard(site, esc) : item ? renderRandomExperience() : '<div class="random-empty"><h2>这个类型暂时空空的。</h2><p>换个类型，再找找别的奇怪东西。</p></div>'}
     <div class="random-actions">
-      <button class="pill pink" type="button" data-action="next">再来一个奇怪的东西 <span aria-hidden="true">✦</span></button>
-      ${available(item) && item.replay ? '<button type="button" class="pill plain" data-action="retry">再玩一次</button>' : ""}
-      ${available(item) && item.favorite ? `<button type="button" class="pill plain" data-action="favorite" data-id="${item.id}" aria-pressed="${saved.favorites.includes(item.id)}">${saved.favorites.includes(item.id) ? "★ 已收藏" : "☆ 收藏这个"}</button>` : ""}
-      ${available(item) && item.share ? '<button type="button" class="text-button" data-action="share-item">分享给朋友</button>' : ""}
-      <a class="text-link" href="/collection">看全部体验</a>
+      <button class="pill pink" type="button" data-action="next"${randomResult ? "" : " disabled"}>再来一个奇怪的东西 <span aria-hidden="true">✦</span></button>
+      ${site ? `<button class="pill plain" type="button" data-action="external-favorite" data-id="${esc(site.id)}" aria-pressed="${Boolean(held)}">${held ? "★ 已收藏网站" : "☆ 收藏这个网站"}</button>` : ""}
+      ${originalActions && item.replay ? '<button type="button" class="pill plain" data-action="retry">再玩一次</button>' : ""}
+      ${originalActions && item.favorite ? `<button type="button" class="pill plain" data-action="favorite" data-id="${item.id}" aria-pressed="${saved.favorites.includes(item.id)}">${saved.favorites.includes(item.id) ? "★ 已收藏" : "☆ 收藏这个"}</button>` : ""}
+      ${originalActions && item.share ? '<button type="button" class="text-button" data-action="share-item">分享给朋友</button>' : ""}
+      <a class="text-link" href="/archive">看我的档案</a>
     </div>
   </section>`;
 }
 
-function collectionExperiences() {
-  const shown = experiences.filter(
-    (entry) =>
-      available(entry) && (category === "全部" || entry.type === category),
-  );
-  if (order === "热门") shown.sort((a, b) => b.rank - a.rank);
-  if (order === "上新顺序") shown.sort((a, b) => b.sequence - a.sequence);
-  return `${mascotGuide("collection", "看到喜欢的，就点星星把它收起来。")}
-    <div class="card-grid">${shown
-      .map((entry) => {
-        const held = saved.favorites.includes(entry.id);
-        return `<div class="collection-tile">${card(entry)}<button type="button" class="favorite-star" data-action="favorite" data-id="${entry.id}" aria-label="${held ? "取消收藏" : "收藏"}${entry.title}" aria-pressed="${held}">${held ? "★" : "☆"}</button></div>`;
-      })
-      .join("")}</div>`;
+function renderRandomExperience() {
+  return `<article class="random-card ${item.color}" aria-labelledby="random-title">
+    <div class="random-art">${artPanel(item)}${posterMark()}</div>
+    <div class="random-copy"><small>${item.type} · ${item.time} · ${item.difficulty}</small><h2 id="random-title">${item.title}</h2><p>${item.intro}</p>
+      ${renderGame(item, reduced() || saved.settings.fishManual, unlocked)}
+      <p class="result" id="activity-result" role="status"></p>
+    </div>
+  </article>`;
 }
 
-function collection() {
-  const params = new URLSearchParams(location.search);
-  const internet = isInternetCollection(params);
-  const active = internet ? internetSection : category;
-  const sort = `<label class="select-label">排序<select data-change="collection-order">${["推荐", "热门", "上新顺序"].map((name) => `<option ${name === order ? "selected" : ""}>${name}</option>`).join("")}</select></label>`;
-  return `<section class="body-section collection-page">
-    <div class="section-heading"><div><p class="eyeline">✸ 脑洞存放处</p><h1 class="display"><span class="marker lime">奇怪合集</span></h1><p>收留没有地方可去的奇怪念头。</p></div><a class="pill plain" href="/archive#favorites">看我的收藏</a></div>
-    <div class="collection-controls"><div class="chips" role="group" aria-label="按类型筛选">${categories.map((name) => `<button type="button" data-action="collection-filter" data-id="${name}" aria-pressed="${active === name}">${name}</button>`).join("")}
-    <button class="collection-internet-tab" type="button" data-action="collection-filter" data-id="${internetSection}" aria-pressed="${internet}">奇妙互联网</button></div>${internet ? "" : sort}</div>
-    ${internet ? renderInternetCollection(params, esc) : collectionExperiences()}
+function archiveSites(title, sectionId, ids, empty) {
+  const sites = ids.map(getExternalSite).filter(Boolean).reverse();
+  return `<section id="${sectionId}" class="archive-section" aria-labelledby="${sectionId}-title">
+    <div class="section-heading"><h2 id="${sectionId}-title">${title}</h2></div>
+    ${sites.length ? `<ul class="archive-site-list">${sites.map((site) => `<li><a href="${esc(site.url)}" data-external-site="${esc(site.id)}"><strong lang="en">${esc(site.title)}</strong><small>${esc(site.category)}</small><span aria-hidden="true">↗</span></a></li>`).join("")}</ul>` : `<p class="empty-note">${empty}</p>`}
   </section>`;
 }
 
@@ -434,9 +439,11 @@ function archive() {
     ${archiveTips()}
     ${archiveDiscoveries()}
     ${archiveThoughts()}
-    <section id="favorites" class="archive-section"><div class="section-heading"><h2>我的收藏</h2><a href="/collection" class="text-link">去逛合集</a></div>
+    <section id="favorites" class="archive-section"><div class="section-heading"><h2>我的收藏</h2><a href="/random" class="text-link">去逛随机玩意</a></div>
       ${favoriteItems.length ? '<div class="card-grid">' + favoriteItems.map(card).join("") + "</div>" : '<p class="empty-note">这里还空着。下次玩到喜欢的东西，就把它收进来。</p>'}
     </section>
+    ${archiveSites("收藏的外部网站", "external-favorites", saved.externalFavorites, "下次抽到喜欢的网站，就把它收进来。")}
+    ${archiveSites("最近遇到的网站", "external-history", saved.externalVisited, "逛逛随机玩意，看看能遇到什么网站。")}
   </section>`;
 }
 
@@ -508,21 +515,18 @@ const pages = {
   "/space-daze": space,
   "/fortune": fortune,
   "/random": randomPage,
-  "/collection": collection,
   "/archive": archive,
 };
 
-function nextExperience(filter) {
-  const eligible = experiences.filter(
-    (entry) => available(entry) && (filter === "全部" || filter === entry.type),
-  );
-  const withoutCurrent = eligible.filter((entry) => entry.id !== item?.id);
-  const fresh = withoutCurrent.filter(
-    (entry) => !saved.visited.includes(entry.id),
-  );
-  return pick(
-    fresh.length ? fresh : withoutCurrent.length ? withoutCurrent : eligible,
-  );
+function drawForFilter(filter) {
+  return drawRandomContent({
+    filter,
+    current: randomResult,
+    available,
+    visited: saved.visited,
+    externalVisited: saved.externalVisited,
+    externalSeen: saved.externalSeen,
+  });
 }
 
 function render() {
@@ -564,13 +568,18 @@ function render() {
 }
 
 function openRoute(fromNavigation = false) {
-  const path = location.pathname.replace(/\/$/, "") || "/";
+  let path = location.pathname.replace(/\/$/, "") || "/";
+  if (path === "/collection") {
+    history.replaceState(
+      history.state,
+      "",
+      legacyCollectionHref(new URLSearchParams(location.search)),
+    );
+    path = "/random";
+  }
   if (currentPath === "/space-daze" && path !== currentPath) stopAmbient();
   currentPath = path;
   const params = new URLSearchParams(location.search);
-  category = categories.includes(params.get("type"))
-    ? params.get("type")
-    : "全部";
   clearTimeout(rollTimer);
   rollTimer = null;
   clearTimeout(idleTimer);
@@ -584,14 +593,26 @@ function openRoute(fromNavigation = false) {
     chaseCooldown = 0;
   }
   if (currentPath === "/random") {
-    item = getItem(params.get("id")) || nextExperience(category);
-    if (item && available(item)) {
+    randomFilter = readRandomFilter(params.get("type"));
+    randomResult =
+      randomResultFromLink(params, randomFilter) ?? drawForFilter(randomFilter);
+    item =
+      randomResult?.kind === "experience" ? getItem(randomResult.id) : null;
+    const href = randomHref(randomResult, randomFilter);
+    if (href !== location.pathname + location.search)
+      history.replaceState(history.state, "", href + location.hash);
+    if (item && available(item) && saved.visited.at(-1) !== item.id) {
       saved.visited = [
-        ...saved.visited.filter((id) => id !== item.id).slice(-5),
+        ...saved.visited.filter((id) => id !== item.id),
         item.id,
       ];
       save();
     }
+    if (
+      randomResult?.kind === "external-site" &&
+      recordExternalVisit(saved, randomResult.id)
+    )
+      save();
   }
   if (currentPath === "/fortune") {
     const linked = fortuneFromLink(saved.fortune, params.get("task"));
@@ -619,6 +640,12 @@ function openRoute(fromNavigation = false) {
 function navigate(href) {
   history.pushState(null, "", href);
   openRoute(true);
+}
+
+function openRandomResult(result, filter, focusSelector) {
+  navigate(randomHref(result, filter));
+  animateOnce($(".random-card", main), "random-swap", 200);
+  $(focusSelector, main)?.focus({ preventScroll: true });
 }
 
 function announce(message) {
@@ -925,6 +952,14 @@ function searchResults(value) {
       subtitle: entry.type,
       intro: entry.intro,
     })),
+    ...(query
+      ? publishedSites.map((site) => ({
+          href: randomHref({ kind: "external-site", id: site.id }),
+          title: site.title,
+          subtitle: "奇妙互联网 · " + site.category,
+          intro: [site.description, ...site.tags].join(" "),
+        }))
+      : []),
   ]
     .filter(
       (entry) =>
@@ -1377,13 +1412,13 @@ const actions = {
     announce(reduced() ? "当前已减少动画。" : "已恢复动画设置。");
   },
   next() {
-    const next = nextExperience(category) || nextExperience("全部");
+    const next = drawForFilter(randomFilter);
     if (!next) return;
-    navigate(
-      "/random?id=" +
-        next.id +
-        (category === "全部" ? "" : "&type=" + encodeURIComponent(category)),
-    );
+    if (sameRandomResult(next, randomResult)) {
+      announce("这个类型暂时只有这一项。");
+      return;
+    }
+    openRandomResult(next, randomFilter, '[data-action="next"]');
   },
   retry() {
     render();
@@ -1401,17 +1436,17 @@ const actions = {
       : [...saved.favorites, id];
     save();
     button.setAttribute("aria-pressed", String(!exists));
-    if (button.classList.contains("favorite-star")) {
-      button.textContent = exists ? "☆" : "★";
-      button.setAttribute(
-        "aria-label",
-        (exists ? "收藏" : "取消收藏") + target.title,
-      );
-    } else {
-      button.textContent = exists ? "☆ 收藏这个" : "★ 已收藏";
-    }
+    button.textContent = exists ? "☆ 收藏这个" : "★ 已收藏";
     if (!exists) setMascot("happy");
     announce(exists ? "已移出收藏。" : "收进你的无聊档案了。");
+  },
+  "external-favorite"(button) {
+    const added = toggleExternalFavorite(saved, button.dataset.id);
+    if (added === null) return;
+    save();
+    button.setAttribute("aria-pressed", String(added));
+    button.textContent = added ? "★ 已收藏网站" : "☆ 收藏这个网站";
+    announce(added ? "收进你的无聊档案了。" : "网站已移出收藏。");
   },
   "share-item"() {
     share(item.title + " · 无聊宇宙", "/random?id=" + item.id);
@@ -1493,27 +1528,6 @@ const actions = {
         "/fortune?task=" + taskIndex,
       );
   },
-  "collection-filter"(button) {
-    const next = button.dataset.id;
-    const internet = isInternetCollection(new URLSearchParams(location.search));
-    if (next === internetSection) {
-      if (internet) return;
-      navigate(`/collection?section=${internetSection}`);
-    } else {
-      const href =
-        "/collection" +
-        (next === "全部" ? "" : "?type=" + encodeURIComponent(next));
-      if (internet) navigate(href);
-      else {
-        category = next;
-        history.replaceState(null, "", href);
-        render();
-      }
-    }
-    [...document.querySelectorAll('[data-action="collection-filter"]')]
-      .find((option) => option.dataset.id === next)
-      ?.focus();
-  },
   certificate,
   print: () => window.print(),
 };
@@ -1531,6 +1545,12 @@ document.addEventListener("click", (event) => {
   if (control?.dataset.action)
     actions[control.dataset.action]?.(control, event);
   const link = event.target.closest("a[href]");
+  if (
+    link?.dataset.externalSite &&
+    !event.defaultPrevented &&
+    recordExternalVisit(saved, link.dataset.externalSite)
+  )
+    save();
   if (
     !link ||
     event.defaultPrevented ||
@@ -1562,38 +1582,28 @@ document.addEventListener("input", (event) => {
   activityInput();
   const { id, value } = event.target;
   if (id === "search") searchResults(value);
-  if (id === "internet-name" && !event.isComposing)
-    updateInternetCollection(event.target.form, esc);
   if (id === "fish-power") $("#fish-power-value").value = value;
   if (id === "echo-knob") $("#echo-frequency").value = value;
 });
 
 document.addEventListener("change", (event) => {
   const control = event.target;
-  if (control.form?.id === "internet-filters" && control.name !== "q")
-    updateInternetCollection(control.form, esc);
   if (control.dataset.change === "lab-sound")
     setLabSoundPreference(control.checked);
   if (control.dataset.change === "settings-motion")
     setMotionPreference(control.checked);
   if (control.dataset.change === "random-filter") {
-    category = control.value;
-    actions.next();
-  }
-  if (control.dataset.change === "collection-order") {
-    order = control.value;
-    render();
-    $('[data-change="collection-order"]').focus();
+    const filter = readRandomFilter(control.value);
+    openRandomResult(
+      drawForFilter(filter),
+      filter,
+      '[data-change="random-filter"]',
+    );
   }
 });
 
 document.addEventListener("submit", (event) => {
   const form = event.target;
-  if (form.id === "internet-filters") {
-    event.preventDefault();
-    updateInternetCollection(form, esc);
-    return;
-  }
   if (!form.dataset.form) return;
   event.preventDefault();
   const data = new FormData(form);

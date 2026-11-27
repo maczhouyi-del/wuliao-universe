@@ -1,5 +1,3 @@
-export const internetSection = "internet";
-
 export const externalSites = [
   {
     id: "why-zero",
@@ -12,7 +10,6 @@ export const externalSites = [
     sourceUrl: "https://www.awwwards.com/sites/why-zero",
     deviceHint: "建议桌面端体验",
     motif: "portal",
-    sortOrder: 1,
     status: "published",
   },
   {
@@ -26,7 +23,6 @@ export const externalSites = [
     sourceUrl: "https://www.awwwards.com/messenger.html",
     deviceHint: "建议桌面端体验",
     motif: "orbit",
-    sortOrder: 2,
     status: "published",
   },
   {
@@ -40,7 +36,6 @@ export const externalSites = [
     sourceUrl: "https://ponpon-mania.com/about",
     deviceHint: "建议桌面端看完整画面",
     motif: "panels",
-    sortOrder: 3,
     status: "published",
   },
   {
@@ -54,7 +49,6 @@ export const externalSites = [
     sourceUrl: "https://bruno-simon.com/",
     deviceHint: "支持键盘与触屏驾驶",
     motif: "road",
-    sortOrder: 4,
     status: "published",
   },
   {
@@ -68,7 +62,6 @@ export const externalSites = [
     sourceUrl: "https://obys.agency/work/grids",
     deviceHint: "建议在较宽的屏幕查看版式",
     motif: "grid",
-    sortOrder: 5,
     status: "published",
   },
   {
@@ -82,61 +75,24 @@ export const externalSites = [
     sourceUrl: "https://globalwebdesignawards.com/sites/the-tie-break",
     deviceHint: "建议桌面端体验",
     motif: "court",
-    sortOrder: 6,
     status: "published",
   },
 ];
 
-const kindOrder = ["互动游戏", "沉浸体验", "互动故事", "视觉实验", "3D探索"];
-
-export function isInternetCollection(params) {
-  return params.get("section") === internetSection;
-}
-
 export function publishedExternalSites(sites = externalSites) {
-  return sites
-    .filter((site) => {
-      if (site.status !== "published") return false;
-      try {
-        const url = new URL(site.url);
-        return url.protocol === "https:" && !url.username && !url.password;
-      } catch {
-        return false;
-      }
-    })
-    .sort((first, second) => first.sortOrder - second.sortOrder);
+  return sites.filter((site) => {
+    if (site.status !== "published") return false;
+    try {
+      const url = new URL(site.url);
+      return url.protocol === "https:" && !url.username && !url.password;
+    } catch {
+      return false;
+    }
+  });
 }
 
-const published = publishedExternalSites();
-const kinds = [...new Set(published.map((site) => site.category))];
-export const internetKinds = [
-  ...kindOrder.filter((kind) => kinds.includes(kind)),
-  ...kinds.filter((kind) => !kindOrder.includes(kind)),
-];
-export const internetTags = [
-  ...new Set(published.flatMap((site) => site.tags)),
-];
+export const publishedSites = publishedExternalSites();
 
-export function readInternetFilters(params) {
-  const kind = params.get("kind");
-  const tag = params.get("tag");
-  return {
-    kind: internetKinds.includes(kind) ? kind : "",
-    tag: internetTags.includes(tag) ? tag : "",
-    q: (params.get("q") || "").slice(0, 80),
-  };
-}
-
-function searchKey(value) {
-  return value.normalize("NFKC").toLowerCase().trim();
-}
-
-export function filterExternalSites({ kind = "", tag = "", q = "" } = {}) {
-  const query = searchKey(q);
-  return published.filter(
-    (site) =>
-      (!kind || site.category === kind) &&
-      (!tag || site.tags.includes(tag)) &&
-      searchKey(site.title).includes(query),
-  );
+export function getExternalSite(id) {
+  return publishedSites.find((site) => site.id === id);
 }
