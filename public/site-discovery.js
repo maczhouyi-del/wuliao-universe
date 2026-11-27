@@ -4,7 +4,16 @@ import {
   renderExternalCard,
 } from "./external-card.js";
 
-export const rotationDelay = 5500;
+import { motion } from "./page-motion.js";
+
+export const rotationDelay = 6000;
+export const capsuleDuration = 1760;
+const manualDelay = 8000;
+
+export function slideDirection(from, to, count) {
+  const forward = (to - from + count) % count;
+  return forward === 0 ? 0 : forward <= count / 2 ? 1 : -1;
+}
 
 export function renderSiteDiscovery(count) {
   return `<section class="body-section random-page discovery-page" data-discovery>
@@ -16,16 +25,17 @@ export function renderSiteDiscovery(count) {
         ? `<div class="discovery-layout">
       <section class="site-carousel" aria-labelledby="site-carousel-heading">
         <div class="site-carousel-bar"><h2 id="site-carousel-heading">奇妙互联网</h2><p data-carousel-count>${count} 个网站</p></div>
-        <div class="site-rail" data-site-rail>
+        <div class="site-rail" data-site-rail><div class="site-film">
           <button class="site-neighbor" type="button" data-step="-1"></button>
           <div class="site-center" data-site-center></div>
           <button class="site-neighbor" type="button" data-step="1"></button>
-        </div>
+        </div></div>
         <div class="site-controls">
           <button type="button" class="icon-button" data-step="-1" aria-label="上一个网站">←</button>
           <button type="button" class="icon-button" data-step="1" aria-label="下一个网站">→</button>
           <button type="button" class="text-button carousel-toggle" data-carousel-toggle>暂停轮播</button>
         </div>
+        <div class="carousel-dots" role="group" aria-label="切换网站" data-carousel-dots></div>
         <p class="sr-only" role="status" data-slide-status></p>
       </section>
       <aside class="capsule-stall" aria-labelledby="capsule-title">
@@ -56,40 +66,117 @@ export function mountSiteDiscovery(
   const find = (selector) => root.querySelector(selector);
   const carousel = find(".site-carousel");
   const rail = find("[data-site-rail]");
+  const film = find(".site-film");
   const center = find("[data-site-center]");
   const neighbors = rail.querySelectorAll("[data-step]");
+  const dots = find("[data-carousel-dots]");
   const toggle = find("[data-carousel-toggle]");
   const machine = find("[data-machine]");
   const spin = find("[data-spin]");
   const status = find("[data-machine-status]");
+  const counter = find("[data-carousel-count]");
+  const slideStatus = find("[data-slide-status]");
+  dots.innerHTML = sites
+    .map(
+      ({ title }, index) =>
+        `<button type="button" data-slide="${index}" aria-label="${index + 1}，${esc(title)}" tabindex="-1"></button>`,
+    )
+    .join("");
+  const dotButtons = [...dots.children];
   let index = Math.max(
     0,
     sites.findIndex(({ id }) => id === initial),
   );
-  let autoplay = !reduced();
+  let autoplay = true;
   let hovered = false;
+  let nextDelay = rotationDelay;
   let timer;
   let reveal;
   let prize;
-  let start;
+  let gesture;
+  let dragFrame;
+  let ignoreClickUntil = 0;
+  let outgoing;
+  let slideAnimations = [];
 
   function schedule() {
     clearTimeout(timer);
     if (
       autoplay &&
+      !reduced() &&
       !hovered &&
       !document.hidden &&
-      (!carousel.contains(document.activeElement) ||
-        document.activeElement === toggle) &&
+      !gesture &&
+      !carousel.querySelector(":focus-visible") &&
       !prize &&
       sites.length > 1
     ) {
-      timer = setTimeout(() => move(1, false), rotationDelay);
+      timer = setTimeout(() => changeBy(1, false), nextDelay);
     }
   }
 
-  function show(manual) {
+  function clearSlide() {
+    for (const animation of slideAnimations) animation.cancel();
+    slideAnimations = [];
+    outgoing?.remove();
+    outgoing = null;
+  }
+
+  function slide(previous, direction, dragX) {
+    const offset = direction * 46;
+    const timing = { duration: motion.slow - 100, easing: motion.smooth };
+    outgoing = previous;
+    previous.classList.add("site-exit");
+    previous.inert = true;
+    previous.setAttribute("aria-hidden", "true");
+    previous.removeAttribute("aria-labelledby");
+    previous.querySelector("[id]")?.removeAttribute("id");
+    rail.append(previous);
+    const arrive = center.animate(
+      [
+        {
+          transform: `translateX(calc(${offset}% + ${dragX}px)) scale(.9)`,
+          opacity: 0.38,
+        },
+        { transform: "translateX(0) scale(1)", opacity: 1 },
+      ],
+      timing,
+    );
+    const depart = previous.animate(
+      [
+        { transform: `translateX(${dragX}px) scale(1)`, opacity: 1 },
+        { transform: `translateX(${-offset}%) scale(.9)`, opacity: 0 },
+      ],
+      timing,
+    );
+    depart.onfinish = () => {
+      previous.remove();
+      if (outgoing === previous) outgoing = null;
+    };
+    slideAnimations = [
+      arrive,
+      depart,
+      ...Array.from(neighbors, (neighbor) =>
+        neighbor.animate(
+          [
+            { translate: `${direction * 17}px`, opacity: 0.48 },
+            { translate: "0", opacity: 0.88 },
+          ],
+          timing,
+        ),
+      ),
+    ];
+  }
+
+  function show({ manual = false, direction = 0, dragX = 0 } = {}) {
+    clearSlide();
     const site = sites[index];
+    const previous =
+      direction && !reduced() && !document.hidden
+        ? center.firstElementChild?.cloneNode(true)
+        : null;
+    if (previous) previous.style.width = center.offsetWidth + "px";
+    const focusInCard = center.contains(document.activeElement);
     center.innerHTML = renderExternalCard(
       site,
       esc,
@@ -108,19 +195,53 @@ export function mountSiteDiscovery(
           neighbor.title,
       );
     }
-    find("[data-carousel-count]").textContent =
-      `${index + 1} / ${sites.length}`;
-    if (manual) find("[data-slide-status]").textContent = site.title;
+    for (const [position, button] of dotButtons.entries()) {
+      const active = position === index;
+      button.tabIndex = active ? 0 : -1;
+      if (active) button.setAttribute("aria-current", "true");
+      else button.removeAttribute("aria-current");
+    }
+    const activeDot = dotButtons[index];
+    dots.scrollTo({
+      left:
+        activeDot.offsetLeft - (dots.clientWidth - activeDot.offsetWidth) / 2,
+      behavior: !reduced() && manual ? "smooth" : "instant",
+    });
+    if (focusInCard) activeDot.focus({ preventScroll: true });
+    counter.textContent = `${index + 1} / ${sites.length}`;
+    if (manual) slideStatus.textContent = site.title;
     select(site.id);
+    if (previous) slide(previous, direction, dragX);
+    nextDelay = manual ? manualDelay : rotationDelay;
     schedule();
   }
 
-  function move(direction, manual = true) {
-    index = (index + direction + sites.length) % sites.length;
-    show(manual);
+  function moveTo(
+    next,
+    manual = true,
+    direction = slideDirection(index, next, sites.length),
+    dragX = 0,
+  ) {
+    if (prize || next === index) {
+      nextDelay = manualDelay;
+      schedule();
+      return;
+    }
+    index = next;
+    show({ manual, direction, dragX });
+  }
+
+  function changeBy(direction, manual = true, dragX = 0) {
+    moveTo(
+      (index + direction + sites.length) % sites.length,
+      manual,
+      direction,
+      dragX,
+    );
   }
 
   function updateToggle() {
+    toggle.hidden = sites.length < 2 || reduced();
     toggle.textContent = autoplay ? "暂停轮播" : "播放轮播";
     schedule();
   }
@@ -131,38 +252,75 @@ export function mountSiteDiscovery(
     machine.classList.remove("is-shaking");
     machine.classList.add("has-prize");
     spin.removeAttribute("aria-disabled");
-    index = sites.findIndex(({ id }) => id === prize.id);
+    const next = sites.findIndex(({ id }) => id === prize.id);
     record(prize.id);
     status.textContent = "抽到了「" + prize.title + "」。";
     prize = null;
-    show(true);
+    moveTo(next);
   }
 
   root.addEventListener(
     "click",
     (event) => {
+      if (
+        event.detail &&
+        performance.now() < ignoreClickUntil &&
+        rail.contains(event.target)
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (event.target.closest("[data-external-site]")) {
         autoplay = false;
         updateToggle();
       }
-      const step = event.target.closest("[data-step]");
-      if (step && !prize) move(Number(step.dataset.step));
-      if (event.target.closest("[data-carousel-toggle]")) {
-        autoplay = !autoplay;
+      const control = event.target.closest(
+        "[data-step], [data-slide], [data-carousel-toggle], [data-spin]",
+      );
+      if (!control) return;
+      if (control.dataset.step) return changeBy(Number(control.dataset.step));
+      if (control.dataset.slide !== undefined)
+        return moveTo(Number(control.dataset.slide));
+      if (control.hasAttribute("data-carousel-toggle")) {
+        if (!reduced()) autoplay = !autoplay;
         updateToggle();
+        return;
       }
-      if (!event.target.closest("[data-spin]") || prize) return;
-      const result = draw();
-      if (!result) return;
-      prize = result;
-      autoplay = false;
-      updateToggle();
+      if (prize) return;
+      prize = draw();
+      if (!prize) return;
+      schedule();
       spin.setAttribute("aria-disabled", "true");
       status.textContent = "扭蛋正在掉下来……";
       machine.classList.remove("has-prize");
-      if (reduced()) return finish();
+      if (reduced() || document.hidden) return finish();
       machine.classList.add("is-shaking");
-      reveal = setTimeout(finish, 990);
+      reveal = setTimeout(finish, capsuleDuration);
+    },
+    { signal },
+  );
+
+  carousel.addEventListener(
+    "keydown",
+    (event) => {
+      if (
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+      )
+        return;
+      // Let users scroll the page with Home/End except when they are using the dots.
+      if (["Home", "End"].includes(event.key) && !dots.contains(event.target))
+        return;
+      event.preventDefault();
+      if (event.key === "Home") moveTo(0);
+      if (event.key === "End") moveTo(sites.length - 1);
+      if (event.key === "ArrowLeft") changeBy(-1);
+      if (event.key === "ArrowRight") changeBy(1);
+      if (dots.contains(event.target))
+        dotButtons[index].focus({ preventScroll: true });
     },
     { signal },
   );
@@ -192,66 +350,118 @@ export function mountSiteDiscovery(
       }),
     { signal },
   );
-  document.addEventListener("visibilitychange", schedule, { signal });
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+      if (document.hidden) {
+        clearSlide();
+        finish();
+      }
+      schedule();
+    },
+    { signal },
+  );
 
   rail.addEventListener(
     "pointerdown",
     (event) => {
-      if (
-        !event.isPrimary ||
-        event.button !== 0 ||
-        event.target.closest("a, button")
-      )
+      if (!event.isPrimary || event.button !== 0 || prize || sites.length < 2)
         return;
-      start = { id: event.pointerId, x: event.clientX, y: event.clientY };
-      rail.setPointerCapture(event.pointerId);
+      ignoreClickUntil = 0;
+      gesture = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        dx: 0,
+        engaged: false,
+      };
+      schedule();
+    },
+    { signal },
+  );
+  rail.addEventListener(
+    "pointermove",
+    (event) => {
+      if (gesture?.id !== event.pointerId) return;
+      const dx = event.clientX - gesture.x;
+      const dy = event.clientY - gesture.y;
+      if (!gesture.engaged) {
+        if (Math.abs(dx) < 11 || Math.abs(dx) < Math.abs(dy)) return;
+        gesture.engaged = true;
+        clearSlide();
+        rail.setPointerCapture(event.pointerId);
+      }
+      gesture.dx = dx;
+      if (!reduced() && !dragFrame)
+        dragFrame = requestAnimationFrame(() => {
+          dragFrame = 0;
+          if (gesture)
+            film.style.setProperty(
+              "--rail-drag",
+              `${Math.max(-140, Math.min(140, gesture.dx * 0.58))}px`,
+            );
+        });
     },
     { signal },
   );
   rail.addEventListener(
     "touchmove",
     (event) => {
-      if (!start || event.touches.length !== 1 || !event.cancelable) return;
+      if (!gesture || event.touches.length !== 1 || !event.cancelable) return;
       const touch = event.touches[0];
-      const dx = Math.abs(touch.clientX - start.x);
-      const dy = Math.abs(touch.clientY - start.y);
-      // Keep a horizontal swipe from being interpreted as a scroll fling.
+      const dx = Math.abs(touch.clientX - gesture.x);
+      const dy = Math.abs(touch.clientY - gesture.y);
       if (dx > 12 && dx > dy) event.preventDefault();
     },
     { signal, passive: false },
   );
-  rail.addEventListener(
-    "pointerup",
-    (event) => {
-      if (start?.id !== event.pointerId) return;
-      const dx = event.clientX - start.x;
-      const dy = event.clientY - start.y;
-      start = null;
-      if (!prize && Math.abs(dx) > 38 && Math.abs(dx) > Math.abs(dy))
-        move(dx < 0 ? 1 : -1);
-    },
-    { signal },
-  );
-  rail.addEventListener(
-    "lostpointercapture",
-    () => {
-      start = null;
-    },
-    { signal },
-  );
+
+  function endGesture(event) {
+    if (gesture?.id !== event.pointerId) return;
+    const { dx, engaged } = gesture;
+    const dragX = parseFloat(film.style.getPropertyValue("--rail-drag")) || 0;
+    gesture = null;
+    cancelAnimationFrame(dragFrame);
+    dragFrame = 0;
+    film.style.removeProperty("--rail-drag");
+    if (engaged && event.type === "pointerup") {
+      ignoreClickUntil = performance.now() + 420;
+      if (Math.abs(dx) > 38) return changeBy(dx < 0 ? 1 : -1, true, dragX);
+    }
+    if (dragX && !reduced()) {
+      slideAnimations.push(
+        film.animate(
+          [
+            { transform: `translateX(${dragX}px)` },
+            { transform: "translateX(0)" },
+          ],
+          { duration: motion.fast, easing: motion.smooth },
+        ),
+      );
+    }
+    schedule();
+  }
+
+  for (const event of ["pointerup", "pointercancel"]) {
+    window.addEventListener(event, endGesture, { signal });
+  }
+  rail.addEventListener("lostpointercapture", (event) => {
+    // Touch initially captures on the touched child before we capture the rail.
+    if (event.target === rail) endGesture(event);
+  }, { signal });
 
   if (sites.length < 2) {
     for (const button of root.querySelectorAll(
-      "[data-step], [data-carousel-toggle]",
+      "[data-step], [data-carousel-dots]",
     ))
       button.hidden = true;
   }
-  show(false);
+  show();
   updateToggle();
   return {
     motionChanged() {
       if (reduced()) {
-        autoplay = false;
+        clearSlide();
         finish();
       }
       updateToggle();
@@ -260,6 +470,8 @@ export function mountSiteDiscovery(
       lifecycle.abort();
       clearTimeout(timer);
       clearTimeout(reveal);
+      cancelAnimationFrame(dragFrame);
+      clearSlide();
     },
   };
 }

@@ -21,6 +21,8 @@ import {
 import {
   renderSiteDiscovery,
   rotationDelay,
+  capsuleDuration,
+  slideDirection,
 } from "../public/site-discovery.js";
 
 test("the reviewed library covers the six discovery categories and is independent of games", () => {
@@ -51,11 +53,21 @@ test("the reviewed library covers the six discovery categories and is independen
     assert(Number.isSafeInteger(site.sortOrder));
     assert.equal(typeof site.requiresSound, "boolean");
     assert(Object.hasOwn(site, "awwwardsUrl"));
-    if (site.awwwardsUrl) assert.equal(new URL(site.awwwardsUrl).protocol, "https:");
+    if (site.awwwardsUrl)
+      assert.equal(new URL(site.awwwardsUrl).protocol, "https:");
   }
-  assert.equal(rotationDelay, 5500);
+  assert.equal(rotationDelay, 6000);
   assert.equal(randomHref("why-zero"), "/random?site=why-zero");
   assert.equal(randomHref(), "/random");
+});
+
+test("carousel jumps take the shorter horizontal direction across the loop", () => {
+  assert.equal(slideDirection(47, 0, 48), 1);
+  assert.equal(slideDirection(0, 47, 48), -1);
+  assert.equal(slideDirection(3, 12, 48), 1);
+  assert.equal(slideDirection(12, 3, 48), -1);
+  assert.equal(slideDirection(6, 6, 48), 0);
+  assert(capsuleDuration >= 1500 && capsuleDuration <= 2000);
 });
 
 test("only published sites with valid HTTPS destinations enter the draw", () => {

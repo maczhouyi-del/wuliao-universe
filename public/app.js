@@ -35,6 +35,7 @@ import { attachMascot, mascotLine, setMascot } from "./mascot.js";
 import { getExternalSite, publishedSites } from "./external-sites.js";
 import { mountSiteDiscovery, renderSiteDiscovery } from "./site-discovery.js";
 import { drawExternalSite, randomHref } from "./random-explore.js";
+import { motion, mountPageMotion } from "./page-motion.js";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const main = $("#main");
@@ -89,13 +90,13 @@ let currentPath;
 let item;
 let currentSite;
 let siteDiscovery;
+let pageMotion;
 let dailyView = getDailyRecommendation();
 let chaseCount = 0;
 let chaseCaught = false;
 let boredPress;
 let chaseCooldown = 0;
 let lastPointerSample = 0;
-let lastLoroPeek = -Infinity;
 let labMessage = "试试看。反正按钮自己也很好奇。";
 let game;
 let idleTimer;
@@ -127,7 +128,7 @@ function artPanel(experience, lazy = false) {
 }
 
 function card(experience) {
-  return `<a class="experience-card ${experience.color}" href="/experience?id=${experience.id}">
+  return `<a data-reveal class="experience-card ${experience.color}" href="/experience?id=${experience.id}">
     <div class="card-art">${artPanel(experience, true)}</div>
     <div class="card-copy"><small>${experience.type} · ${experience.time}</small><h3>${experience.title}</h3><p>${experience.intro}</p></div>
     <span class="card-arrow" aria-hidden="true">↗</span>
@@ -150,9 +151,9 @@ function home() {
         <span class="home-counters"><span id="hello-count">已说你好 ×${saved.homeCounters.hello}</span><span id="bored-count">已抓住无聊 ×${saved.homeCounters.bored}</span></span>
       </div>
       <div class="word-stack hello-stack">
-        <button class="word hello one" type="button" data-action="hello">你好</button>
-        <button class="word hello two" type="button" data-action="hello">你好</button>
-        <button class="word hello three" type="button" data-action="hello">你好</button>
+        <button class="word hello one" type="button" data-action="hello"><span class="hello-ink">你好</span></button>
+        <button class="word hello two" type="button" data-action="hello"><span class="hello-ink">你好</span></button>
+        <button class="word hello three" type="button" data-action="hello"><span class="hello-ink">你好</span></button>
       </div>
       <div class="word-stack bored-stack">
         <button class="word bored one" type="button" data-action="bored">无聊</button>
@@ -178,9 +179,9 @@ function home() {
     ${dailySection()}
     <a class="discovery-link text-link" href="/archive#discoveries">你已经发现 ${discoveryCount()} / ${discoveryTotal} 个隐藏彩蛋。</a>
     <div class="portal-grid">
-      <a class="portal pink" href="/lab"><small>无聊实验</small>${art("button", "", true)}<h3>没用的东西研究所</h3><p>这里的实验，一个比一个没用。</p></a>
-      <a class="portal purple" href="/space-daze"><small>慢慢来</small>${art("planet", "", true)}<h3>宇宙发呆中心</h3><p>什么都不用做，也挺好的。</p></a>
-      <a class="portal lime" href="/fortune"><small>随机挑战</small>${art("machine", "", true)}<h3>随机命运分配局</h3><p>抽一件微不足道又挺有意思的事。</p></a>
+      <a data-reveal class="portal pink" href="/lab"><small>无聊实验</small>${art("button", "", true)}<h3>没用的东西研究所</h3><p>这里的实验，一个比一个没用。</p></a>
+      <a data-reveal class="portal purple" href="/space-daze"><small>慢慢来</small>${art("planet", "", true)}<h3>宇宙发呆中心</h3><p>什么都不用做，也挺好的。</p></a>
+      <a data-reveal class="portal lime" href="/fortune"><small>随机挑战</small>${art("machine", "", true)}<h3>随机命运分配局</h3><p>抽一件微不足道又挺有意思的事。</p></a>
     </div>
   </section>`;
 }
@@ -279,6 +280,7 @@ function space() {
   return `<section class="space-scene" aria-labelledby="space-title">
     ${pageTip("space")}
     <div class="space-stage" id="space-stage">
+      <i class="space-cloud" aria-hidden="true"></i><i class="space-cloud space-cloud-far" aria-hidden="true"></i>
       <header class="space-title"><h1 id="space-title">宇宙发呆中心</h1><p>什么都不用做。</p></header>
       <aside class="star-note"><strong>星星怎么玩</strong><small>点一下：收藏 / 放回<br>拖一下：移动星星<br>方向键：微调位置</small></aside>
       ${stars
@@ -414,7 +416,7 @@ function archive() {
   return `<section class="body-section archive-page">
     <div class="section-heading"><div><p class="eyeline">✦ 聊绒的记录本</p><h1 class="display"><span class="marker pink">我的无聊档案</span></h1><p>你花在奇怪念头上的时间，都记在这个浏览器里。</p></div></div>
     ${mascotGuide("archive", archiveLine())}
-    <div class="stat-grid">${stats.map(([count, label]) => `<div><strong>${count}</strong><span>${label}</span></div>`).join("")}</div>
+    <div class="stat-grid">${stats.map(([count, label]) => `<div><strong${Number.isSafeInteger(count) ? ` data-stat-value="${count}" data-motion-key="${label}"` : ""}>${count}</strong><span>${label}</span></div>`).join("")}</div>
     <div class="certificate-strip"><div><h2>${saved.presses >= 28 ? "优秀按钮按压员" : "国际无聊组织认证证书"}</h2><p>今天也给无聊留了一点位置。</p></div><button type="button" class="pill pink" data-action="certificate">领取我的证书</button></div>
     ${archiveTips()}
     ${archiveDiscoveries()}
@@ -454,7 +456,8 @@ function archiveDiscoveries() {
   });
   return `<section class="archive-section" id="discoveries"><div class="section-heading"><h2>隐藏发现</h2></div>
     <label class="discovery-progress">你已经发现 ${records.length} / ${discoveryTotal} 个秘密
-      <progress value="${records.length}" max="${discoveryTotal}"></progress>
+      <progress class="sr-only" value="${records.length}" max="${discoveryTotal}"></progress>
+      <span class="discovery-meter" aria-hidden="true"><i data-meter-fill="${records.length / discoveryTotal}" data-motion-key="discovery-meter" style="--meter-fill:${records.length / discoveryTotal}"></i></span>
     </label>
     ${pending ? '<p class="discovery-hint">还有一些奇怪的秘密等你发现。</p>' : ""}
     <ul class="record-grid">
@@ -463,7 +466,7 @@ function archiveDiscoveries() {
           ([
             id,
             time,
-          ]) => `<li><strong>${discoveries[id].title}</strong><p>${discoveries[id].reward}</p>
+          ]) => `<li data-reveal data-motion-key="discovery-${id}"><strong>${discoveries[id].title}</strong><p>${discoveries[id].reward}</p>
       <small>${time ? `<time datetime="${new Date(time).toISOString()}">${date.format(time)}</time>` : "旧版存档未记录时间"}</small>
       ${id === "lab-echo" ? '<a class="text-link" href="/experience?id=echo">收听电台</a>' : ""}
       ${id === "door-person" ? '<a class="text-link" href="/experience?id=door">回门边看看</a>' : ""}</li>`,
@@ -506,12 +509,19 @@ function selectExternalSite(id) {
     history.replaceState(history.state, "", href + location.hash);
 }
 
-function render() {
-  for (const animation of animations.values()) {
+function clearFeedback() {
+  for (const [element, animation] of animations) {
     cancelAnimationFrame(animation.frame);
     clearTimeout(animation.timer);
+    element.classList.remove(animation.name);
   }
   animations.clear();
+}
+
+function render(enter = false) {
+  clearFeedback();
+  pageMotion?.stop();
+  pageMotion = null;
   siteDiscovery?.stop();
   siteDiscovery = null;
   game?.stop();
@@ -557,6 +567,7 @@ function render() {
       },
     });
   }
+  pageMotion = mountPageMotion(main, { reduced, enter });
   updateMotion();
   resetIdle();
 }
@@ -579,6 +590,8 @@ function openRoute(fromNavigation = false) {
     );
   }
   if (currentPath === "/space-daze" && path !== currentPath) stopAmbient();
+  const changing =
+    Boolean(currentPath) && (currentPath !== path || fromNavigation);
   currentPath = path;
   const params = new URLSearchParams(location.search);
   clearTimeout(rollTimer);
@@ -618,7 +631,7 @@ function openRoute(fromNavigation = false) {
   $("#toast").classList.remove("visible");
   closeMenu();
   activityClock.sample();
-  render();
+  render(changing);
   if (location.hash) {
     const section = document.getElementById(location.hash.slice(1));
     if (section) section.scrollIntoView();
@@ -666,7 +679,7 @@ function checkIdle() {
     ? [
         ["curious", "喂。"],
         ["thinking", "你还在吗？"],
-        ["companion", "算了，我们一起发呆吧。"],
+        ["sleepy", "算了，我们一起发呆吧……"],
       ]
     : [
         ["sleepy", "聊绒眼睛快睁不开了……"],
@@ -713,6 +726,8 @@ function updateMotion() {
       ? "系统已开启减少动画。"
       : "系统动画偏好为默认。";
   }
+  if (reduced()) clearFeedback();
+  pageMotion?.motionChanged();
   game?.motionChanged();
   siteDiscovery?.motionChanged();
 }
@@ -732,17 +747,16 @@ function setLabSoundPreference(enabled) {
 }
 
 function animateOnce(element, name, duration) {
-  if (!element || reduced()) return;
+  if (!element || reduced() || document.hidden) return;
   const previous = animations.get(element);
   if (previous) {
     cancelAnimationFrame(previous.frame);
     clearTimeout(previous.timer);
     element.classList.remove(previous.name);
-    if (previous.name === name) void element.offsetWidth;
   }
   const animation = { name };
   animations.set(element, animation);
-  animation.frame = requestAnimationFrame(() => {
+  const start = () => {
     if (!element.isConnected) {
       animations.delete(element);
       return;
@@ -752,13 +766,19 @@ function animateOnce(element, name, duration) {
       element.classList.remove(name);
       animations.delete(element);
     }, duration);
+  };
+  animation.frame = requestAnimationFrame(() => {
+    if (previous?.name === name) animation.frame = requestAnimationFrame(start);
+    else start();
   });
 }
 
 function showDiscovery(id) {
   const link = $(".discovery-link");
-  if (link)
+  if (link) {
     link.textContent = `你已经发现 ${discoveryCount()} / ${discoveryTotal} 个隐藏彩蛋。`;
+    animateOnce(link, "discovery-glint", motion.slow);
+  }
   announce("发现彩蛋 · " + discoveries[id].title);
 }
 
@@ -794,6 +814,8 @@ function markCompleted(id) {
 function pressLab() {
   const count = ++saved.presses;
   $("#press-count").textContent = count;
+  animateOnce($("#press-count"), "count-tick", motion.normal);
+  animateOnce($(".lab-spark"), "lab-impact", motion.normal);
   const milestone = labMilestones[count];
   labMessage =
     milestone?.[0] ||
@@ -813,6 +835,7 @@ function pressLab() {
   if (count === 50) {
     discover("lab-echo");
     $("#lab-echo").hidden = false;
+    animateOnce($("#lab-echo"), "radio-unlock", 760);
   }
   if (saved.settings.labSound) playChime();
 }
@@ -998,6 +1021,7 @@ function certificate() {
     "无聊认证",
     `<div class="certificate"><small>国际无聊组织</small><strong>${title}</strong>${art("loro")}<p>你已经按过 ${saved.presses} 次按钮，<br>并给无聊宇宙留了一点时间。</p></div><button class="pill pink" type="button" data-action="print">打印 / 存为 PDF</button>`,
   );
+  animateOnce($(".certificate", dialog), "certificate-arrive", motion.slow);
 }
 
 function showJar() {
@@ -1052,7 +1076,9 @@ function changeStarCollection(id, button) {
   syncStars();
   if (result.collected) {
     announce("把这颗星星收进罐子了。");
+    pageMotion?.flyStar(button, $(".jar-link"));
     animateOnce(button, "star-pop", 420);
+    animateOnce($("#star-count"), "count-tick", motion.normal);
     setMascot("happy");
     markCompleted("star");
   } else {
@@ -1099,7 +1125,8 @@ function rollTask(button) {
       entry.disabled = true;
     });
   setMascot("scared", 800);
-  animateOnce($("#fortune-machine"), "machine-shake", 650);
+  animateOnce($("#fortune-machine"), "machine-shake", motion.slow);
+  animateOnce($("#task-card strong"), "fortune-shuffle", motion.slow);
   const wasMain = button.closest(".fortune-intro");
   rollTimer = setTimeout(
     () => {
@@ -1110,14 +1137,17 @@ function rollTask(button) {
       rollTimer = null;
       render();
       $("#task-feedback").textContent = "聊绒把任务递给了你。";
-      setMascot("happy");
+      setMascot(
+        { site: "curious", idea: "inspired" }[next.task.type] || "happy",
+      );
+      animateOnce($("#task-card strong"), "fortune-reveal", motion.normal);
       $(
         wasMain
           ? '.fortune-intro [data-action="roll"]'
           : '.fortune-actions [data-action="roll"]',
       ).focus({ preventScroll: true });
     },
-    reduced() ? 100 : 650,
+    reduced() ? 100 : motion.slow,
   );
 }
 
@@ -1246,21 +1276,6 @@ function tryDodge(event, now) {
   ];
   chaseCooldown = now + 440;
   setMascot("naughty", 850);
-}
-
-function observeHome(event, now) {
-  const mascot = event.target.closest(".hero-mascot");
-  if (!mascot || event.pointerType !== "mouse" || reduced()) return;
-  const { left, width } = mascot.getBoundingClientRect();
-  const turn = Math.round(((event.clientX - left) / width - 0.5) * 10);
-  const rotation = turn + "deg";
-  if (mascot.style.getPropertyValue("--loro-gaze") !== rotation) {
-    mascot.style.setProperty("--loro-gaze", rotation);
-  }
-  if (now - lastLoroPeek >= 4500) {
-    lastLoroPeek = now;
-    setMascot(Math.random() < 0.25 ? "naughty" : "curious", 700);
-  }
 }
 
 function starPosition(button, { x, y }) {
@@ -1494,6 +1509,8 @@ const actions = {
     button.textContent = "✓ 已完成，我真棒！";
     button.disabled = true;
     $("#task-feedback").textContent = taskReplies[tasks[taskIndex].type];
+    animateOnce(button, "task-success", motion.normal);
+    animateOnce($("#task-feedback"), "fortune-reveal", motion.normal);
     setMascot("happy");
     rememberThought("task");
     markCompleted("fortune");
@@ -1675,6 +1692,8 @@ dialog.addEventListener("close", () => {
 });
 
 document.addEventListener("visibilitychange", () => {
+  document.documentElement.classList.toggle("motion-paused", document.hidden);
+  if (document.hidden) clearFeedback();
   activityClock.visibility(!document.hidden);
   save();
   clearTimeout(idleTimer);
@@ -1791,7 +1810,6 @@ document.addEventListener(
       // Touch scrolling and mouse movement both count as interaction. Hit tests run only on the home poster.
       activityInput(now);
       if (currentPath === "/") {
-        observeHome(event, now);
         tryDodge(event, now);
       }
     }
@@ -1829,6 +1847,7 @@ function endDrag(event) {
   } else {
     starPosition(star, original);
   }
+  if (released) animateOnce(star, "star-settle", motion.normal);
   setMascot("curious");
 }
 
@@ -1852,6 +1871,9 @@ window.addEventListener("pagehide", () => {
   clearTimeout(rollTimer);
   rollTimer = null;
   game?.stop();
+  clearFeedback();
+  pageMotion?.stop();
+  pageMotion = null;
   siteDiscovery?.stop();
   siteDiscovery = null;
   stopAmbient();
